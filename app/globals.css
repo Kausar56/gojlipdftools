@@ -1,26 +1,85 @@
 @import "tailwindcss";
+@plugin "daisyui";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Light theme (default) — generated from the brand palette: Primary #2663BB, Secondary #10B981, Tertiary #EF4444, Neutral slate */
+@plugin "daisyui/theme" {
+  name: "light";
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+  --color-base-100: #ffffff;
+  --color-base-200: #f8fafc;
+  --color-base-300: #eef1f6;
+  --color-base-content: #0f172a;
+  --color-primary: #2663bb;
+  --color-primary-content: #ffffff;
+  --color-secondary: #10b981;
+  --color-secondary-content: #ffffff;
+  --color-accent: #ef4444;
+  --color-accent-content: #ffffff;
+  --color-neutral: #334155;
+  --color-neutral-content: #f8fafc;
+  --color-info: #0ea5e9;
+  --color-info-content: #ffffff;
+  --color-success: #10b981;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #1c1917;
+  --color-error: #ef4444;
+  --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Dark theme — same brand hues, lifted in lightness for contrast on dark surfaces */
+@plugin "daisyui/theme" {
+  name: "dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+  --color-base-100: #0b1220;
+  --color-base-200: #111a2c;
+  --color-base-300: #1a2436;
+  --color-base-content: #e2e8f0;
+  --color-primary: #4f8fe0;
+  --color-primary-content: #071627;
+  --color-secondary: #34d399;
+  --color-secondary-content: #052e1f;
+  --color-accent: #f87171;
+  --color-accent-content: #450a0a;
+  --color-neutral: #cbd5e1;
+  --color-neutral-content: #0b1220;
+  --color-info: #38bdf8;
+  --color-info-content: #06222f;
+  --color-success: #34d399;
+  --color-success-content: #052e1f;
+  --color-warning: #fbbf24;
+  --color-warning-content: #241a02;
+  --color-error: #f87171;
+  --color-error-content: #450a0a;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter), var(--font-noto-bengali), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  font-family: var(--font-sans);
 }
