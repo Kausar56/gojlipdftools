@@ -5,7 +5,15 @@ import { ToolSteps } from "./ToolSteps";
 import { ToolFaq } from "./ToolFaq";
 import type { Tool } from "@/lib/tools";
 
-export function ToolPageLayout({ tool, workspace }: { tool: Tool; workspace?: React.ReactNode }) {
+export function ToolPageLayout({
+  tool,
+  workspace,
+  showTrustBadges = true,
+}: {
+  tool: Tool;
+  workspace?: React.ReactNode;
+  showTrustBadges?: boolean;
+}) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-8">
       <div className="breadcrumbs text-sm text-base-content/60">
@@ -26,7 +34,7 @@ export function ToolPageLayout({ tool, workspace }: { tool: Tool; workspace?: Re
         {workspace ?? <UploadDropzone accept={tool.accept} actionLabel={tool.name} />}
       </div>
 
-      <TrustBadges className="mt-8 justify-center sm:justify-start" />
+      {showTrustBadges && <TrustBadges className="mt-8 justify-center sm:justify-start" />}
 
       <div className="mt-14">
         <ToolSteps steps={tool.steps} />

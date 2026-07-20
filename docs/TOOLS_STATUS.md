@@ -9,6 +9,9 @@ Keep it updated whenever a tool's status changes.
 - ✅ **Live** — real functionality, verified end-to-end (built + manually driven in a browser).
 - ⚠️ **Wired but broken** — has a real `*Workspace` component plugged in via `workspace={...}`,
   but the underlying tech doesn't actually work yet. Looks live in the UI; isn't.
+- 🔑 **Wired, pending API key** — real, production-shaped integration code is written and the
+  UI/error paths are verified, but the feature can't be end-to-end tested (and must not be marked
+  ✅ Live) until a real third-party API key is supplied in `.env.local`.
 - ⏳ **Not started** — still using the generic `UploadDropzone` placeholder with a disabled
   "Coming soon" action button. Honest placeholder, not broken.
 
@@ -25,12 +28,12 @@ Keep it updated whenever a tool's status changes.
 | Watermark PDF | `watermark-pdf` | ✅ Live | Browser | pdf-lib |
 | PDF Password Protect | `protect-pdf` | ✅ Live | Browser | `@pdfsmaller/pdf-encrypt` (Web Crypto API) |
 | Unlock PDF | `unlock-pdf` | ✅ Live | Browser | `@pdfsmaller/pdf-decrypt` (Web Crypto API) |
-| PDF to Word | `pdf-to-word` | ⏳ Not started | Server (planned) | needs LibreOffice or similar |
-| Word to PDF | `word-to-pdf` | ⏳ Not started | Server (planned) | needs LibreOffice or similar |
-| Excel to PDF | `excel-to-pdf` | ⏳ Not started | Server (planned) | needs LibreOffice or similar |
-| PPT to PDF | `ppt-to-pdf` | ⏳ Not started | Server (planned) | needs LibreOffice or similar |
+| PDF to Word | `pdf-to-word` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
+| Word to PDF | `word-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
+| Excel to PDF | `excel-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
+| PPT to PDF | `ppt-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
 
-**9 live, 4 not started**, out of 13 tools.
+**9 live, 4 wired pending API key**, out of 13 tools.
 
 ---
 
@@ -126,13 +129,51 @@ page count.
 `next.config.ts` were all removed — none of it is needed anymore. `next.config.ts` is back to
 default.
 
-## ⏳ PDF to Word / Word to PDF / Excel to PDF / PPT to PDF
+## 🔑 PDF to Word / Word to PDF / Excel to PDF / PPT to PDF
 
-Not started. All four need a real document-conversion engine (LibreOffice headless is the standard
-open-source choice; paid APIs like Adobe/Aspose/CloudConvert are the alternative). Same Vercel
-constraint as above applies — LibreOffice is not installable on Vercel serverless without a custom
-container. Likely needs a separate always-on service (Railway/Render/Fly.io/a VPS) rather than a
-Vercel API route, with the Next.js app calling out to it.
+**Decision**: LibreOffice headless (the pure-open-source route) needs a persistent native install —
+not viable on Vercel serverless without a custom container/always-on VM, which is out of scope.
+Went with **CloudConvert's REST API** (`https://api.cloudconvert.com/v2`) instead — a hosted
+conversion engine reached over HTTP, no native binary on our side at all.
+
+**Architecture** (designed around Vercel's ~4.5MB serverless request-body limit — Office files can
+easily exceed that, so the file never passes through *our* server):
+
+1. Browser calls **`POST /api/convert/start`** (`app/api/convert/start/route.ts`) with just
+   `{filename, inputFormat, outputFormat}` — no file bytes. This route uses `lib/cloudconvert.ts`
+   (a server-only wrapper around the official `cloudconvert` npm SDK, reading
+   `process.env.CLOUDCONVERT_API_KEY`) to create a CloudConvert job with three tasks:
+   `import/upload` → `convert` → `export/url`. It returns `{jobId, uploadUrl, uploadParameters}`
+   (the signed upload form CloudConvert generated for the `import/upload` task).
+2. Browser uploads the file **directly to CloudConvert** (`uploadUrl` + multipart form with
+   `uploadParameters`, file field posted last per CloudConvert's docs) — bypassing our server
+   entirely for the actual file transfer.
+3. Browser polls **`GET /api/convert/status?jobId=...`** (`app/api/convert/status/route.ts`) every
+   2s (up to 60x) until the job's `export/url` task reports `finished`, then returns
+   `{downloadUrl, filename}`.
+4. All three steps are wrapped in `lib/convertClient.ts`'s `convertViaCloudConvert(file,
+   inputFormat, outputFormat, onStatus?)`, which is the only thing the UI calls.
+
+**UI**: `components/OfficeConvertWorkspace.tsx` — a shared component parameterized by
+`{inputFormat, outputFormat, accept, icon, actionLabel}`, used by all four tool pages via the
+`workspace` prop. Unlike every other tool on this site, this one is **not** 100% browser-processed
+(the file really is sent to CloudConvert's servers), so it carries an explicit disclosure notice
+before *and* after file selection, and the pages pass `showTrustBadges={false}` to
+`ToolPageLayout` — the site-wide "Processed in your browser / No upload wait" badges
+(`components/TrustBadges.tsx`) would be misleading here otherwise. If any future tool also needs a
+third-party upload, remember to do the same.
+
+**Status**: all code paths verified except the actual conversion:
+- `npm run build` compiles clean (routes, SDK wrapper, client helper, workspace, all 4 pages).
+- With `CLOUDCONVERT_API_KEY` unset, confirmed end-to-end in a real browser (Playwright): the
+  disclosure notice shows before and after upload, `/api/convert/start` returns
+  `{error: "Conversion isn't configured yet — CLOUDCONVERT_API_KEY is missing on the server."}`
+  with HTTP 500, and the UI surfaces that exact message instead of crashing or hanging.
+- **Not yet tested**: an actual successful conversion (real key, real upload, real polling, real
+  downloaded file). Needs a real `CLOUDCONVERT_API_KEY` in `.env.local` — the user has a
+  CloudConvert account (verified via the CloudConvert MCP connection during development) and will
+  supply the key later. **Do not mark these ✅ Live until that real run is verified** — same bar as
+  every other tool in this file.
 
 ---
 
@@ -151,7 +192,8 @@ Vercel API route, with the Next.js app calling out to it.
   Always prefer client-side unless something concrete blocks it — PDF encryption looked like a
   server-only problem (see the qpdf-wasm history above) but turned out to have a pure-JS/Web-Crypto
   answer once we stopped assuming "encryption library" implies "native binary or WASM threads". The
-  remaining server-only case is Office conversion (`pdf-to-word`, `word-to-pdf`, `excel-to-pdf`,
-  `ppt-to-pdf`) — LibreOffice genuinely has no browser or pure-JS equivalent.
+  remaining non-browser case is Office conversion (`pdf-to-word`, `word-to-pdf`, `excel-to-pdf`,
+  `ppt-to-pdf`) — no browser or pure-JS equivalent exists, so these go straight from the browser to
+  a third-party API (CloudConvert) rather than through our own server (see the section above).
 - **Bangla localization**: still not started. The whole site is English-only; this was an original
   project goal that got deprioritized while building out tool functionality.

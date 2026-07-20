@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
+import { OfficeConvertWorkspace } from "@/components/OfficeConvertWorkspace";
 import { getToolBySlug } from "@/lib/tools";
 
 const tool = getToolBySlug("word-to-pdf")!;
@@ -10,5 +11,19 @@ export const metadata: Metadata = {
 };
 
 export default function WordToPdfPage() {
-  return <ToolPageLayout tool={tool} />;
+  return (
+    <ToolPageLayout
+      tool={tool}
+      showTrustBadges={false}
+      workspace={
+        <OfficeConvertWorkspace
+          inputFormat="docx"
+          outputFormat="pdf"
+          accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          icon={tool.icon}
+          actionLabel="Convert to PDF"
+        />
+      }
+    />
+  );
 }

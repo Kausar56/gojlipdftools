@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
+import { OfficeConvertWorkspace } from "@/components/OfficeConvertWorkspace";
 import { getToolBySlug } from "@/lib/tools";
 
 const tool = getToolBySlug("ppt-to-pdf")!;
@@ -10,5 +11,19 @@ export const metadata: Metadata = {
 };
 
 export default function PptToPdfPage() {
-  return <ToolPageLayout tool={tool} />;
+  return (
+    <ToolPageLayout
+      tool={tool}
+      showTrustBadges={false}
+      workspace={
+        <OfficeConvertWorkspace
+          inputFormat="pptx"
+          outputFormat="pdf"
+          accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          icon={tool.icon}
+          actionLabel="Convert to PDF"
+        />
+      }
+    />
+  );
 }
