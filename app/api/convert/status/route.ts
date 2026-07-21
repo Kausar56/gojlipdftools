@@ -12,10 +12,14 @@ export async function GET(request: Request) {
     const job = await cloudConvert.jobs.get(jobId, { include: "tasks" });
 
     if (job.status === "error") {
-      const failedTask = job.tasks.find((task) => task.status === "error");
+      const errorTasks = job.tasks.filter((task) => task.status === "error");
+      // Tasks downstream of a failure cascade with a generic "Input task has
+      // failed" (code INPUT_TASK_FAILED) message — prefer the task that has
+      // the actual root-cause message instead of surfacing the generic one.
+      const rootCause = errorTasks.find((task) => task.code !== "INPUT_TASK_FAILED") ?? errorTasks[0];
       return NextResponse.json({
         status: "error",
-        error: failedTask?.message ?? "The conversion failed.",
+        error: rootCause?.message ?? "The conversion failed.",
       });
     }
 

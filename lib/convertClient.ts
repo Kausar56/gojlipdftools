@@ -3,12 +3,44 @@ export type ConvertResult = {
   filename: string;
 };
 
+async function validateBeforeUpload(file: File, inputFormat: string): Promise<void> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  if (inputFormat === "pdf") {
+    const { PDFDocument } = await import("pdf-lib");
+    try {
+      await PDFDocument.load(bytes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("encrypted")) {
+        throw new Error(
+          "This PDF is password protected. Unlock it first (use our Unlock PDF tool), then try converting again.",
+        );
+      }
+      throw new Error("This doesn't look like a valid PDF file. Please check the file and try again.");
+    }
+    return;
+  }
+
+  // .docx/.xlsx/.pptx are ZIP-based — a valid file starts with the ZIP signature "PK".
+  // Password-protected Office files (and legacy .doc/.xls/.ppt) don't, so this also
+  // catches those before we ever spend an upload/conversion on a file that will fail.
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    throw new Error(
+      "This doesn't look like a valid file for this conversion. If it's password protected, remove the password first.",
+    );
+  }
+}
+
 export async function convertViaCloudConvert(
   file: File,
   inputFormat: string,
   outputFormat: string,
   onStatus?: (message: string) => void,
 ): Promise<ConvertResult> {
+  onStatus?.("Checking your file...");
+  await validateBeforeUpload(file, inputFormat);
+
   onStatus?.("Starting conversion...");
 
   const startRes = await fetch("/api/convert/start", {
