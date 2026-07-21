@@ -1,4 +1,4 @@
-# PDFFlow — Tool Status (internal)
+# Gojli — Tool Status (internal)
 
 This file is for developers working on this repo. It's not linked from the site and isn't
 rendered anywhere (Next.js only routes `app/`, so a root-level `docs/` folder is never public).

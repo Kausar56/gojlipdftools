@@ -21,6 +21,9 @@ export async function POST(request: Request) {
   try {
     const cloudConvert = getCloudConvert();
 
+    const baseName = filename.replace(/\.[^./\\]+$/, "");
+    const outputFilename = `${baseName}.${outputFormat}`;
+
     const job = await cloudConvert.jobs.create({
       tasks: {
         "import-file": { operation: "import/upload" },
@@ -29,7 +32,7 @@ export async function POST(request: Request) {
           input: "import-file",
           input_format: inputFormat,
           output_format: outputFormat,
-          filename,
+          filename: outputFilename,
         },
         "export-file": {
           operation: "export/url",

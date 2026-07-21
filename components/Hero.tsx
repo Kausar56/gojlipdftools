@@ -10,7 +10,7 @@ export function Hero() {
           The Best Way to <span className="text-primary">Manage</span> Your PDFs
         </h1>
         <p className="mx-auto mt-4 max-w-lg text-base text-base-content/70 sm:text-lg lg:mx-0">
-          PDFFlow is a free, browser-based toolkit for everyday document work. Merge, split,
+          Gojli is a free, browser-based toolkit for everyday document work. Merge, split,
           compress, and convert PDFs with precision — nothing to install.
         </p>
         <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">

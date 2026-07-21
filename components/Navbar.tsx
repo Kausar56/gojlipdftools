@@ -19,7 +19,7 @@ export function Navbar() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-content">
             <ToolIcon name="merge" className="h-5 w-5" />
           </span>
-          PDFFlow
+          Gojli
         </Link>
         <ul className="ml-6 hidden items-center gap-5 text-sm font-medium text-base-content/70 lg:flex">
           <li>

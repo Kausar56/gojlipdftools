@@ -14,7 +14,7 @@ export default function Home() {
           <div className="text-center">
             <h2 className="text-2xl font-semibold text-base-content sm:text-3xl">Every Tool You Need</h2>
             <p className="mx-auto mt-3 max-w-2xl text-base text-base-content/70">
-              PDFFlow offers a complete toolkit to handle any document task in seconds, directly in your
+              Gojli offers a complete toolkit to handle any document task in seconds, directly in your
               browser.
             </p>
           </div>

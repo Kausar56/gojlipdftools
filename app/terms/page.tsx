@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
-  description: "The terms that govern your use of PDFFlow.",
+  description: "The terms that govern your use of Gojli.",
 };
 
 export default function TermsPage() {
@@ -12,7 +12,7 @@ export default function TermsPage() {
       <p className="mt-2 text-sm text-base-content/50">Last updated: July 14, 2026</p>
 
       <div className="mt-6 rounded-lg border border-base-300 bg-base-200 px-4 py-3 text-sm text-base-content/70">
-        This is a general starting-point terms document for PDFFlow. Review and adapt it (ideally
+        This is a general starting-point terms document for Gojli. Review and adapt it (ideally
         with a lawyer) before relying on it for a live product with real users.
       </div>
 
@@ -20,7 +20,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Acceptance of terms</h2>
           <p className="mt-2">
-            By using PDFFlow, you agree to these Terms of Service. If you don&apos;t agree, please
+            By using Gojli, you agree to these Terms of Service. If you don&apos;t agree, please
             don&apos;t use the site.
           </p>
         </section>
@@ -28,7 +28,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Description of service</h2>
           <p className="mt-2">
-            PDFFlow provides free tools to merge, split, compress, convert, and otherwise work with
+            Gojli provides free tools to merge, split, compress, convert, and otherwise work with
             PDF files. Some tools run entirely in your browser; others may require sending a file to
             a server for processing (see our{" "}
             <a href="/privacy" className="text-primary hover:underline">
@@ -41,7 +41,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Acceptable use</h2>
           <p className="mt-2">
-            You agree not to use PDFFlow to process files you don&apos;t have the legal right to use,
+            You agree not to use Gojli to process files you don&apos;t have the legal right to use,
             or for any unlawful purpose, including uploading malware or attempting to disrupt the
             service.
           </p>
@@ -50,7 +50,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">No warranty</h2>
           <p className="mt-2">
-            PDFFlow is provided &ldquo;as is&rdquo;, without warranties of any kind. We don&apos;t
+            Gojli is provided &ldquo;as is&rdquo;, without warranties of any kind. We don&apos;t
             guarantee the service will be uninterrupted, error-free, or fit for any particular
             purpose. Always keep a backup of your original files before processing them.
           </p>
@@ -59,7 +59,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Limitation of liability</h2>
           <p className="mt-2">
-            To the fullest extent permitted by law, PDFFlow and its operators aren&apos;t liable for
+            To the fullest extent permitted by law, Gojli and its operators aren&apos;t liable for
             any indirect, incidental, or consequential damages arising from your use of the service.
           </p>
         </section>

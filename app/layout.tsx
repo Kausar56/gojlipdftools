@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "PDFFlow — Merge, Split, Compress & Convert PDFs Online",
-    template: "%s | PDFFlow",
+    default: "Gojli — Merge, Split, Compress & Convert PDFs Online",
+    template: "%s | Gojli",
   },
   description:
     "Free, browser-based PDF tools to merge, split, compress, and convert PDF files online. No installation required.",

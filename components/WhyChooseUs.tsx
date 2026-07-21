@@ -25,7 +25,7 @@ export function WhyChooseUs() {
 
         <div className="order-1 lg:order-2">
           <h2 className="text-2xl font-semibold text-base-content sm:text-3xl">
-            Why Choose PDFFlow for Your Work?
+            Why Choose Gojli for Your Work?
           </h2>
           <ul className="mt-6 space-y-5">
             {reasons.map((reason) => (
@@ -41,7 +41,7 @@ export function WhyChooseUs() {
             ))}
           </ul>
           <Link href="/about" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-primary">
-            Read more about PDFFlow
+            Read more about Gojli
             <ToolIcon name="arrow-right" className="h-4 w-4" />
           </Link>
         </div>

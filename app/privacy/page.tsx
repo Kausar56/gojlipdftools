@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "How PDFFlow handles your files and data.",
+  description: "How Gojli handles your files and data.",
 };
 
 export default function PrivacyPage() {
@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <p className="mt-2 text-sm text-base-content/50">Last updated: July 14, 2026</p>
 
       <div className="mt-6 rounded-lg border border-base-300 bg-base-200 px-4 py-3 text-sm text-base-content/70">
-        This is a general starting-point policy for PDFFlow. Review and adapt it (ideally with a
+        This is a general starting-point policy for Gojli. Review and adapt it (ideally with a
         lawyer) before relying on it for a live product with real users.
       </div>
 
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Overview</h2>
           <p className="mt-2">
-            PDFFlow (&ldquo;we&rdquo;, &ldquo;our&rdquo;) provides free PDF tools. This policy explains what
+            Gojli (&ldquo;we&rdquo;, &ldquo;our&rdquo;) provides free PDF tools. This policy explains what
             happens to your files and data when you use the site.
           </p>
         </section>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Cookies & analytics</h2>
           <p className="mt-2">
-            PDFFlow does not currently use tracking cookies or third-party analytics. If that changes,
+            Gojli does not currently use tracking cookies or third-party analytics. If that changes,
             this policy will be updated to describe what&apos;s collected and why.
           </p>
         </section>
@@ -59,7 +59,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-base-content">Children&apos;s privacy</h2>
-          <p className="mt-2">PDFFlow is not directed at children under 13 and does not knowingly collect their data.</p>
+          <p className="mt-2">Gojli is not directed at children under 13 and does not knowingly collect their data.</p>
         </section>
 
         <section>
