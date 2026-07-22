@@ -87,20 +87,20 @@ export function MergePdfWorkspace() {
   }
 
   return (
-    <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+    <div className="card p-6">
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
           addFiles(event.dataTransfer.files);
         }}
-        className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-base-300 px-6 py-10 text-center"
+        className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl px-6 py-8 text-center"
       >
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <ToolIcon name="upload" className="h-6 w-6" />
         </span>
         <p className="text-sm text-base-content/70">Drag & drop PDF files here, or</p>
-        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-sm">
+        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-md">
           Choose Files
         </button>
         <input

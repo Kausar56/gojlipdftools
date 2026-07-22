@@ -588,7 +588,7 @@ export function PdfEditorWorkspace() {
 
   if (!file) {
     return (
-      <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      <div className="card p-6">
         <div
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
@@ -596,7 +596,7 @@ export function PdfEditorWorkspace() {
             const dropped = event.dataTransfer.files?.[0];
             if (dropped) loadFile(dropped);
           }}
-          className="flex min-h-100 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-base-300 p-10 text-center"
+          className="flex min-h-100 flex-col items-center justify-center gap-4 rounded-xl p-10 text-center"
         >
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
             <ToolIcon name="upload" className="h-7 w-7" />
@@ -607,7 +607,7 @@ export function PdfEditorWorkspace() {
               Drag & drop a file here, or choose one from your device.
             </p>
           </div>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="btn btn-primary btn-sm">
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="btn btn-primary btn-md">
             Choose File
           </button>
           <input

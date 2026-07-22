@@ -9,7 +9,7 @@ export default function Home() {
     <>
       <Hero />
 
-      <section id="tools" className="bg-base-200 py-16">
+      <section id="tools" className="relative overflow-hidden bg-base-200 pt-16 pb-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-8">
           <div className="text-center">
             <h2 className="text-2xl font-semibold text-base-content sm:text-3xl">Every Tool You Need</h2>
@@ -22,6 +22,15 @@ export default function Home() {
             <ToolGrid tools={tools} />
           </div>
         </div>
+
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full text-base-100 sm:h-16"
+          viewBox="0 0 1440 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path d="M0,40 C360,100 1080,0 1440,60 L1440,100 L0,100 Z" fill="currentColor" />
+        </svg>
       </section>
 
       <WorkflowSteps />

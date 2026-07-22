@@ -9,7 +9,7 @@ const chips = [
 export function DecorativePanel({ className }: { className?: string }) {
   return (
     <div
-      className={`relative rounded-3xl bg-gradient-to-br from-primary/15 via-secondary/10 to-accent/15 p-6 sm:p-8 ${className ?? ""}`}
+      className={`relative rounded-3xl bg-base-100 bg-linear-to-br from-primary/15 via-secondary/10 to-accent/15 p-6 sm:p-8 ${className ?? ""}`}
     >
       <div className="rounded-2xl border border-base-300 bg-base-100 shadow-xl">
         <div className="flex items-center gap-1.5 border-b border-base-300 px-4 py-3">

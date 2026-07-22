@@ -81,13 +81,13 @@ export function WatermarkPdfWorkspace() {
           const dropped = event.dataTransfer.files?.[0];
           if (dropped) loadFile(dropped);
         }}
-        className="card flex min-h-[260px] flex-col items-center justify-center gap-4 border-2 border-dashed border-base-300 bg-base-100 p-10 text-center"
+        className="card flex min-h-48 flex-col items-center justify-center gap-3 py-8 text-center"
       >
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <ToolIcon name="upload" className="h-6 w-6" />
         </span>
         <p className="text-sm text-base-content/70">Drag & drop a PDF here, or</p>
-        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-sm">
+        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-md">
           Choose File
         </button>
         <input

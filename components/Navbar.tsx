@@ -1,8 +1,14 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ToolIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { MobileMenu } from "./MobileMenu";
 import { MegaMenu } from "./MegaMenu";
+import { tools } from "@/lib/tools";
 
 const navLinks = [
   { href: "/compress-pdf", label: "Compress" },
@@ -11,9 +17,51 @@ const navLinks = [
   { href: "/about", label: "About" },
 ];
 
+const heroPagePaths = new Set([
+  "/",
+  "/pricing",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  ...tools.map((tool) => `/${tool.slug}`),
+]);
+
 export function Navbar() {
+  const pathname = usePathname();
+  const isHeroPage = heroPagePaths.has(pathname);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    if (!isHeroPage) return;
+    function onScroll() {
+      setIsScrolled(window.scrollY > 20);
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [isHeroPage]);
+
+  const blended = isHeroPage && !isScrolled;
+
   return (
-    <div className="navbar sticky top-0 z-40 gap-2 border-b border-base-300 bg-base-100 px-4 sm:px-8">
+    <div
+      className={`navbar sticky top-0 z-40 gap-2 px-4 transition-colors sm:px-8 ${
+        blended
+          ? "border-b border-transparent bg-transparent"
+          : "border-b border-base-300 bg-base-100/80 shadow-sm backdrop-blur-md"
+      }`}
+    >
+      {blended && (
+        <div
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{
+            backgroundImage: "radial-gradient(circle, var(--color-base-content) 1.5px, transparent 1.5px)",
+            backgroundSize: "24px 24px",
+            opacity: 0.18,
+          }}
+        />
+      )}
+
       <div className="flex flex-1 items-center">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-base-content">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-content">
@@ -35,15 +83,17 @@ export function Navbar() {
         </ul>
       </div>
       <div className="flex items-center gap-2">
-        <label className="input input-bordered input-sm hidden items-center gap-2 lg:flex">
-          <ToolIcon name="search" className="h-3.5 w-3.5 text-base-content/50" />
-          <input type="text" placeholder="Search tools..." className="grow" />
-        </label>
+        <Link
+          href="/pricing"
+          className="hidden px-2 text-sm font-medium text-base-content/70 hover:text-primary lg:flex"
+        >
+          Pricing
+        </Link>
+        <LanguageSwitcher />
         <ThemeToggle />
-        <button type="button" className="btn btn-primary btn-sm hidden lg:inline-flex">
-          Sign In
-          <span className="badge badge-ghost badge-xs">Soon</span>
-        </button>
+        <Link href="/login" className="btn btn-primary btn-sm hidden lg:inline-flex">
+          Login
+        </Link>
         <MobileMenu />
       </div>
     </div>

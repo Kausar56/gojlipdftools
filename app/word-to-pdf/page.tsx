@@ -14,7 +14,6 @@ export default function WordToPdfPage() {
   return (
     <ToolPageLayout
       tool={tool}
-      showTrustBadges={false}
       workspace={
         <OfficeConvertWorkspace
           inputFormat="docx"

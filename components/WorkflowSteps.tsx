@@ -23,7 +23,7 @@ const steps = [
 
 export function WorkflowSteps() {
   return (
-    <section className="bg-base-100 py-16">
+    <section className="relative overflow-hidden bg-base-100 pt-16 pb-24">
       <div className="mx-auto max-w-5xl px-4 text-center sm:px-8">
         <h2 className="text-2xl font-semibold text-base-content sm:text-3xl">Simplify Your Workflow</h2>
         <div className="mt-10 grid gap-10 sm:grid-cols-3">
@@ -38,6 +38,15 @@ export function WorkflowSteps() {
           ))}
         </div>
       </div>
+
+      <svg
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full text-base-200 sm:h-16"
+        viewBox="0 0 1440 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path d="M0,40 C360,100 1080,0 1440,60 L1440,100 L0,100 Z" fill="currentColor" />
+      </svg>
     </section>
   );
 }

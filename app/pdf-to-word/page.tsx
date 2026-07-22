@@ -14,7 +14,6 @@ export default function PdfToWordPage() {
   return (
     <ToolPageLayout
       tool={tool}
-      showTrustBadges={false}
       workspace={
         <OfficeConvertWorkspace
           inputFormat="pdf"

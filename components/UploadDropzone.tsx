@@ -24,7 +24,7 @@ export function UploadDropzone({
   }
 
   return (
-    <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+    <div className="card p-6">
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -36,15 +36,15 @@ export function UploadDropzone({
           setIsDragging(false);
           addFiles(event.dataTransfer.files);
         }}
-        className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition ${
-          isDragging ? "border-primary bg-primary/5" : "border-base-300"
+        className={`flex min-h-48 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-8 text-center transition ${
+          isDragging ? "border-primary bg-primary/5" : "border-transparent"
         }`}
       >
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
           <ToolIcon name="upload" className="h-6 w-6" />
         </span>
         <p className="text-sm text-base-content/70">Drag & drop files here, or</p>
-        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-sm">
+        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-md">
           Choose Files
         </button>
         <input

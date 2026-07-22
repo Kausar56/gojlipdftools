@@ -14,7 +14,6 @@ export default function ExcelToPdfPage() {
   return (
     <ToolPageLayout
       tool={tool}
-      showTrustBadges={false}
       workspace={
         <OfficeConvertWorkspace
           inputFormat="xlsx"

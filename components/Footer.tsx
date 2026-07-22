@@ -12,7 +12,7 @@ const companyLinks = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-base-300 bg-base-100">
+    <footer className="bg-base-200">
       <div className="mx-auto grid max-w-6xl grid-cols-2 gap-8 px-4 py-10 sm:grid-cols-5 sm:px-8">
         <div className="col-span-2">
           <p className="text-lg font-semibold text-base-content">Gojli</p>
@@ -57,7 +57,7 @@ export function Footer() {
           </ul>
         </div>
       </div>
-      <div className="border-t border-base-300 py-4 text-center text-xs text-base-content/60">
+      <div className="border-t border-base-300/60 py-4 text-center text-xs text-base-content/60">
         © {new Date().getFullYear()} Gojli. Efficient document workflows.
       </div>
     </footer>

@@ -134,6 +134,14 @@ const paths: Record<string, React.ReactNode> = {
   "chevron-down": <path d="M6 9l6 6 6-6" />,
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   close: <path d="M6 6l12 12M18 6L6 18" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18" />
+      <path d="M12 3a14 14 0 0 1 0 18" />
+      <path d="M12 3a14 14 0 0 0 0 18" />
+    </>
+  ),
   "edit-pdf": (
     <>
       <path d="M4 7h11M4 12h6" />

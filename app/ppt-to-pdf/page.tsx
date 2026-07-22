@@ -14,7 +14,6 @@ export default function PptToPdfPage() {
   return (
     <ToolPageLayout
       tool={tool}
-      showTrustBadges={false}
       workspace={
         <OfficeConvertWorkspace
           inputFormat="pptx"
