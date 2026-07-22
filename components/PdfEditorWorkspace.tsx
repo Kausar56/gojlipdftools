@@ -37,6 +37,7 @@ export function PdfEditorWorkspace() {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [pdfDoc, setPdfDoc] = useState<import("pdfjs-dist").PDFDocumentProxy | null>(null);
@@ -50,11 +51,13 @@ export function PdfEditorWorkspace() {
 
   const [activeTool, setActiveTool] = useState<ToolId>("cursor");
   const [activeColorHex, setActiveColorHex] = useState<string>(colorSwatches[0].hex);
+  const [activeFontSizePt, setActiveFontSizePt] = useState(16);
   const [shapeType, setShapeType] = useState<ShapeType>("rectangle");
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [drawingPath, setDrawingPath] = useState<Point[] | null>(null);
   const [lineDraft, setLineDraft] = useState<{ start: Point; current: Point } | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
   const [past, setPast] = useState<EditorElement[][]>([]);
   const [future, setFuture] = useState<EditorElement[][]>([]);
 
@@ -200,8 +203,36 @@ export function PdfEditorWorkspace() {
     });
   }
 
+  function startPan(event: React.MouseEvent) {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startScrollLeft = container.scrollLeft;
+    const startScrollTop = container.scrollTop;
+    setIsPanning(true);
+
+    function onMove(moveEvent: MouseEvent) {
+      scrollContainerRef.current!.scrollLeft = startScrollLeft - (moveEvent.clientX - startX);
+      scrollContainerRef.current!.scrollTop = startScrollTop - (moveEvent.clientY - startY);
+    }
+    function onUp() {
+      setIsPanning(false);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   function handleOverlayMouseDown(event: React.MouseEvent) {
     if (event.target !== event.currentTarget) return;
+
+    if (activeTool === "cursor") {
+      startPan(event);
+      return;
+    }
+
     const point = toPagePoint(event);
 
     if (activeTool === "draw") {
@@ -226,7 +257,7 @@ export function PdfEditorWorkspace() {
         widthPt: 200,
         text: "Text",
         color: activeColorHex,
-        fontSizePt: 16,
+        fontSizePt: activeFontSizePt,
       });
     } else if (activeTool === "shapes") {
       addElement({
@@ -557,27 +588,39 @@ export function PdfEditorWorkspace() {
 
   if (!file) {
     return (
-      <div className="flex min-h-[420px] flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-base-300 bg-base-100 p-10 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-          <ToolIcon name="upload" className="h-7 w-7" />
-        </span>
-        <div>
-          <p className="font-semibold text-base-content">Upload a PDF to start editing</p>
-          <p className="mt-1 text-sm text-base-content/60">Choose a file from your device to open the editor.</p>
-        </div>
-        <button type="button" onClick={() => fileInputRef.current?.click()} className="btn btn-primary btn-sm">
-          Choose File
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf"
-          className="hidden"
-          onChange={(event) => {
-            const selected = event.target.files?.[0];
-            if (selected) loadFile(selected);
+      <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+        <div
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const dropped = event.dataTransfer.files?.[0];
+            if (dropped) loadFile(dropped);
           }}
-        />
+          className="flex min-h-100 flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-base-300 p-10 text-center"
+        >
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ToolIcon name="upload" className="h-7 w-7" />
+          </span>
+          <div>
+            <p className="font-semibold text-base-content">Upload a PDF to start editing</p>
+            <p className="mt-1 text-sm text-base-content/60">
+              Drag & drop a file here, or choose one from your device.
+            </p>
+          </div>
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="btn btn-primary btn-sm">
+            Choose File
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(event) => {
+              const selected = event.target.files?.[0];
+              if (selected) loadFile(selected);
+            }}
+          />
+        </div>
       </div>
     );
   }
@@ -670,115 +713,129 @@ export function PdfEditorWorkspace() {
         <p className="mx-4 mt-3 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>
       )}
 
-      <div className="flex">
-        <div className="flex flex-col items-center gap-1 border-r border-base-300 p-2">
-          {editorTools.map((tool) => (
-            <button
-              key={tool.id}
-              type="button"
-              onClick={() => handleToolClick(tool.id)}
-              aria-label={tool.label}
-              title={tool.label}
-              className={`btn btn-sm btn-square ${activeTool === tool.id ? "btn-primary" : "btn-ghost"}`}
+      <div className="flex flex-wrap items-center gap-2 border-b border-base-300 px-4 py-2">
+        {editorTools.map((tool) => (
+          <button
+            key={tool.id}
+            type="button"
+            onClick={() => handleToolClick(tool.id)}
+            aria-label={tool.label}
+            title={tool.label}
+            className={`btn btn-sm btn-square ${activeTool === tool.id ? "btn-primary" : "btn-ghost"}`}
+          >
+            <ToolIcon name={tool.icon} className="h-4 w-4" />
+          </button>
+        ))}
+
+        {activeTool === "shapes" && (
+          <div className="flex items-center gap-1 border-l border-base-300 pl-2">
+            {shapeTypes.map((shape) => (
+              <button
+                key={shape.id}
+                type="button"
+                onClick={() => setShapeType(shape.id)}
+                aria-label={shape.label}
+                title={shape.label}
+                className={`btn btn-xs btn-square ${shapeType === shape.id ? "btn-primary" : "btn-ghost"}`}
+              >
+                <ToolIcon name={shape.icon} className="h-3.5 w-3.5" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeTool === "text" && (
+          <label className="flex items-center gap-1.5 border-l border-base-300 pl-2 text-xs text-base-content/60">
+            Size
+            <input
+              type="number"
+              min={8}
+              max={160}
+              value={activeFontSizePt}
+              onChange={(event) => setActiveFontSizePt(Number(event.target.value) || 16)}
+              className="input input-bordered input-xs w-14"
+              aria-label="Text font size"
+            />
+          </label>
+        )}
+
+        {toolsWithColor.has(activeTool) && (
+          <div className="flex items-center gap-1.5 border-l border-base-300 pl-2">
+            {colorSwatches.map((swatch) => (
+              <button
+                key={swatch.id}
+                type="button"
+                onClick={() => setActiveColorHex(swatch.hex)}
+                aria-label={`Use ${swatch.id} color`}
+                className={`h-5 w-5 rounded-full ${swatch.className} ${
+                  activeColorHex === swatch.hex ? "ring-2 ring-base-content/40 ring-offset-2 ring-offset-base-100" : ""
+                }`}
+              />
+            ))}
+            <label
+              className="relative flex h-5 w-5 items-center justify-center rounded-full border border-base-300"
+              style={{
+                background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+                boxShadow: !colorSwatches.some((s) => s.hex === activeColorHex)
+                  ? "0 0 0 2px var(--color-base-content)"
+                  : undefined,
+              }}
+              title="Custom color"
+              aria-label="Choose a custom color"
             >
-              <ToolIcon name={tool.icon} className="h-4 w-4" />
-            </button>
-          ))}
+              <input
+                type="color"
+                value={activeColorHex}
+                onChange={(event) => setActiveColorHex(event.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              />
+            </label>
+          </div>
+        )}
 
-          {activeTool === "shapes" && (
-            <div className="mt-2 flex flex-col gap-1 border-t border-base-300 pt-2">
-              {shapeTypes.map((shape) => (
-                <button
-                  key={shape.id}
-                  type="button"
-                  onClick={() => setShapeType(shape.id)}
-                  aria-label={shape.label}
-                  title={shape.label}
-                  className={`btn btn-xs btn-square ${shapeType === shape.id ? "btn-primary" : "btn-ghost"}`}
-                >
-                  <ToolIcon name={shape.icon} className="h-3.5 w-3.5" />
-                </button>
-              ))}
-            </div>
-          )}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden"
+          onChange={handleImageSelected}
+        />
+      </div>
 
-          {toolsWithColor.has(activeTool) && (
-            <div className="mt-2 flex flex-col gap-1.5 border-t border-base-300 pt-2">
-              {colorSwatches.map((swatch) => (
-                <button
-                  key={swatch.id}
-                  type="button"
-                  onClick={() => setActiveColorHex(swatch.hex)}
-                  aria-label={`Use ${swatch.id} color`}
-                  className={`h-5 w-5 rounded-full ${swatch.className} ${
-                    activeColorHex === swatch.hex ? "ring-2 ring-base-content/40 ring-offset-2 ring-offset-base-100" : ""
-                  }`}
-                />
-              ))}
-              <label
-                className="relative flex h-5 w-5 items-center justify-center rounded-full border border-base-300"
-                style={{
-                  background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
-                  boxShadow: !colorSwatches.some((s) => s.hex === activeColorHex)
-                    ? "0 0 0 2px var(--color-base-content)"
-                    : undefined,
-                }}
-                title="Custom color"
-                aria-label="Choose a custom color"
-              >
-                <input
-                  type="color"
-                  value={activeColorHex}
-                  onChange={(event) => setActiveColorHex(event.target.value)}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                />
-              </label>
-            </div>
-          )}
-
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            className="hidden"
-            onChange={handleImageSelected}
-          />
+      {pageCount > 1 && (
+        <div className="flex items-center justify-center gap-3 border-b border-base-300 py-2 text-sm text-base-content/70">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+            disabled={currentPage === 0}
+            className="btn btn-ghost btn-xs btn-square"
+            aria-label="Previous page"
+          >
+            <ToolIcon name="chevron-down" className="h-3.5 w-3.5 rotate-90" />
+          </button>
+          <span>
+            Page {currentPage + 1} of {pageCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={currentPage === pageCount - 1}
+            className="btn btn-ghost btn-xs btn-square"
+            aria-label="Next page"
+          >
+            <ToolIcon name="chevron-down" className="h-3.5 w-3.5 -rotate-90" />
+          </button>
         </div>
+      )}
 
-        <div className="flex-1 overflow-auto bg-base-200 p-6">
-          {pageCount > 1 && (
-            <div className="mb-3 flex items-center justify-center gap-3 text-sm text-base-content/70">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-                disabled={currentPage === 0}
-                className="btn btn-ghost btn-xs btn-square"
-                aria-label="Previous page"
-              >
-                <ToolIcon name="chevron-down" className="h-3.5 w-3.5 rotate-90" />
-              </button>
-              <span>
-                Page {currentPage + 1} of {pageCount}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((p) => Math.min(pageCount - 1, p + 1))}
-                disabled={currentPage === pageCount - 1}
-                className="btn btn-ghost btn-xs btn-square"
-                aria-label="Next page"
-              >
-                <ToolIcon name="chevron-down" className="h-3.5 w-3.5 -rotate-90" />
-              </button>
-            </div>
-          )}
+      <div ref={scrollContainerRef} className="max-h-[70vh] overflow-auto bg-base-200 p-6">
+        {activeTool === "cursor" && (
+          <p className="sticky top-0 z-20 mb-2 -mt-2 bg-base-200/95 py-2 text-center text-xs text-base-content/50 backdrop-blur-sm">
+            Click any text on the page to edit it in place — drag empty space to pan around.
+          </p>
+        )}
 
-          {activeTool === "cursor" && (
-            <p className="mb-2 text-center text-xs text-base-content/50">
-              Click any text on the page to edit it in place.
-            </p>
-          )}
-
-          <div className="flex justify-center">
+        <div className="flex justify-center">
             <div className="relative shadow-xl" style={{ width: canvasWidth, height: canvasHeight }}>
               <canvas ref={canvasRef} className="absolute inset-0" />
 
@@ -836,7 +893,9 @@ export function PdfEditorWorkspace() {
               <div
                 ref={overlayRef}
                 className="absolute inset-0"
-                style={{ cursor: activeTool === "cursor" ? "default" : "crosshair" }}
+                style={{
+                  cursor: activeTool === "cursor" ? (isPanning ? "grabbing" : "grab") : "crosshair",
+                }}
                 onMouseDown={handleOverlayMouseDown}
                 onMouseMove={handleOverlayMouseMove}
                 onMouseUp={handleOverlayMouseUp}
@@ -968,7 +1027,7 @@ export function PdfEditorWorkspace() {
             </div>
           </div>
         </div>
-      </div>
     </div>
   );
 }
+

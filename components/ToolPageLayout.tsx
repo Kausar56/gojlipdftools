@@ -9,13 +9,15 @@ export function ToolPageLayout({
   tool,
   workspace,
   showTrustBadges = true,
+  maxWidthClassName = "max-w-4xl",
 }: {
   tool: Tool;
   workspace?: React.ReactNode;
   showTrustBadges?: boolean;
+  maxWidthClassName?: string;
 }) {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-8">
+    <div className={`mx-auto px-4 py-10 sm:px-8 ${maxWidthClassName}`}>
       <div className="breadcrumbs text-sm text-base-content/60">
         <ul>
           <li>

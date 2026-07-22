@@ -17,6 +17,7 @@ export function JpgToPdfWorkspace() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0 });
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -73,16 +74,22 @@ export function JpgToPdfWorkspace() {
     if (items.length === 0) return;
     setStatus("converting");
     setErrorMessage("");
+    setProgress({ current: 0, total: items.length });
 
     try {
       const { PDFDocument } = await import("pdf-lib");
       const doc = await PDFDocument.create();
 
-      for (const item of items) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
         const bytes = await item.file.arrayBuffer();
         const image = item.file.type === "image/png" ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
         const page = doc.addPage([image.width, image.height]);
         page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+        setProgress({ current: i + 1, total: items.length });
+        // Yield to the browser so the progress bar actually paints between images
+        // instead of jumping straight to 100% once the synchronous loop finishes.
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
 
       const outBytes = await doc.save();
@@ -98,6 +105,39 @@ export function JpgToPdfWorkspace() {
           : "Couldn't convert these images.",
       );
     }
+  }
+
+  function convertAgain() {
+    itemsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
+    setItems([]);
+    setDownloadUrl(null);
+    setStatus("idle");
+    setErrorMessage("");
+    setProgress({ current: 0, total: 0 });
+  }
+
+  if (status === "done" && downloadUrl) {
+    return (
+      <div className="card border border-base-300 bg-base-100 p-10 text-center shadow-sm">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success">
+          <ToolIcon name="check" className="h-7 w-7" />
+        </span>
+        <h2 className="mt-4 text-lg font-semibold text-base-content">Your PDF is ready</h2>
+        <p className="mt-1 text-sm text-base-content/60">
+          {items.length} image{items.length === 1 ? "" : "s"} combined into one PDF.
+        </p>
+        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <a href={downloadUrl} download="images.pdf" className="btn btn-primary">
+            <ToolIcon name="download" className="h-4 w-4" />
+            Download PDF
+          </a>
+          <button type="button" onClick={convertAgain} className="btn btn-outline">
+            Convert Again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -132,13 +172,25 @@ export function JpgToPdfWorkspace() {
           {items.map((item, index) => (
             <li key={item.id} className="relative overflow-hidden rounded-lg border border-base-300">
               <span className="badge badge-neutral badge-sm absolute left-1.5 top-1.5 z-10">{index + 1}</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={item.previewUrl} alt={item.file.name} className="h-28 w-full object-cover" />
-              <div className="flex items-center justify-between gap-1 bg-base-200 px-1.5 py-1">
+              <button
+                type="button"
+                onClick={() => removeItem(item.id)}
+                disabled={status === "converting"}
+                aria-label="Remove this image"
+                title="Remove"
+                className="btn btn-circle btn-error btn-xs absolute right-1.5 top-1.5 z-10"
+              >
+                <ToolIcon name="close" className="h-3 w-3" />
+              </button>
+              <div className="flex h-28 w-full items-center justify-center bg-base-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={item.previewUrl} alt={item.file.name} className="h-full w-full object-contain" />
+              </div>
+              <div className="flex items-center justify-center gap-1 bg-base-200 px-1.5 py-1">
                 <button
                   type="button"
                   onClick={() => moveItem(index, -1)}
-                  disabled={index === 0}
+                  disabled={index === 0 || status === "converting"}
                   aria-label="Move earlier"
                   className="btn btn-ghost btn-xs btn-square"
                 >
@@ -146,16 +198,8 @@ export function JpgToPdfWorkspace() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => removeItem(item.id)}
-                  aria-label="Remove"
-                  className="btn btn-ghost btn-xs text-error"
-                >
-                  <ToolIcon name="close" className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
                   onClick={() => moveItem(index, 1)}
-                  disabled={index === items.length - 1}
+                  disabled={index === items.length - 1 || status === "converting"}
                   aria-label="Move later"
                   className="btn btn-ghost btn-xs btn-square"
                 >
@@ -171,22 +215,28 @@ export function JpgToPdfWorkspace() {
         <p className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>
       )}
 
+      {status === "converting" && (
+        <div className="mt-5">
+          <progress
+            className="progress progress-primary w-full"
+            value={progress.current}
+            max={Math.max(progress.total, 1)}
+          />
+          <p className="mt-1 text-center text-xs text-base-content/60">
+            Converting image {progress.current} of {progress.total}...
+          </p>
+        </div>
+      )}
+
       <div className="mt-5">
-        {status === "done" && downloadUrl ? (
-          <a href={downloadUrl} download="images.pdf" className="btn btn-primary w-full">
-            <ToolIcon name="download" className="h-4 w-4" />
-            Download PDF
-          </a>
-        ) : (
-          <button
-            type="button"
-            onClick={handleConvert}
-            disabled={items.length === 0 || status === "converting"}
-            className="btn btn-primary w-full"
-          >
-            {status === "converting" ? "Converting..." : "Convert to PDF"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleConvert}
+          disabled={items.length === 0 || status === "converting"}
+          className="btn btn-primary w-full"
+        >
+          {status === "converting" ? "Converting..." : "Convert to PDF"}
+        </button>
       </div>
     </div>
   );
