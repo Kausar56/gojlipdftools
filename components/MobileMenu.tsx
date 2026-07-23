@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { useSupabaseUser } from "@/lib/useSupabaseUser";
 import { ToolIcon } from "./icons";
 
 const navLinks = [
@@ -14,8 +17,22 @@ const navLinks = [
 ];
 
 export function MobileMenu() {
+  const router = useRouter();
+  const user = useSupabaseUser();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  async function handleLogout() {
+    setOpen(false);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } catch {
+      // Not configured — nothing to sign out of.
+    }
+    router.push("/");
+    router.refresh();
+  }
 
   useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -64,9 +81,24 @@ export function MobileMenu() {
             </li>
           ))}
         </ul>
-        <Link href="/login" onClick={() => setOpen(false)} className="btn btn-primary btn-sm mt-3 w-full">
-          Login
-        </Link>
+        {user ? (
+          <div className="mt-3 flex gap-2">
+            <Link
+              href="/dashboard"
+              onClick={() => setOpen(false)}
+              className="btn btn-outline btn-sm flex-1"
+            >
+              Dashboard
+            </Link>
+            <button type="button" onClick={handleLogout} className="btn btn-primary btn-sm flex-1">
+              Log out
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" onClick={() => setOpen(false)} className="btn btn-primary btn-sm mt-3 w-full">
+            Login
+          </Link>
+        )}
       </div>
     </div>
   );

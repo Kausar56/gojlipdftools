@@ -3,6 +3,16 @@ export type ConvertResult = {
   filename: string;
 };
 
+export class ConvertError extends Error {
+  code?: string;
+
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "ConvertError";
+    this.code = code;
+  }
+}
+
 async function validateBeforeUpload(file: File, inputFormat: string): Promise<void> {
   const bytes = new Uint8Array(await file.arrayBuffer());
 
@@ -46,11 +56,11 @@ export async function convertViaCloudConvert(
   const startRes = await fetch("/api/convert/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: file.name, inputFormat, outputFormat }),
+    body: JSON.stringify({ filename: file.name, inputFormat, outputFormat, fileSizeBytes: file.size }),
   });
   if (!startRes.ok) {
     const body = await startRes.json().catch(() => ({}));
-    throw new Error(body.error ?? "Couldn't start the conversion.");
+    throw new ConvertError(body.error ?? "Couldn't start the conversion.", body.code);
   }
   const { jobId, uploadUrl, uploadParameters } = await startRes.json();
 

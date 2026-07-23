@@ -197,3 +197,48 @@ third-party upload, remember to do the same.
   a third-party API (CloudConvert) rather than through our own server (see the section above).
 - **Bangla localization**: still not started. The whole site is English-only; this was an original
   project goal that got deprioritized while building out tool functionality.
+
+## 🔑 Authentication (Supabase) — `lib/supabase/`, `proxy.ts`, `/login`, `/signup`, `/forgot-password`, `/reset-password`, `/dashboard`
+
+Real auth, wired to [Supabase](https://supabase.com) — not a UI mockup. Email/password and Google
+OAuth both work once real project keys are in `.env.local`.
+
+- **Env vars**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Supabase dashboard →
+  Project Settings → API). Both are currently **empty** — until they're filled in, every
+  Supabase-backed action fails with a clear "Supabase isn't configured yet" message instead of
+  crashing (verified: login/signup forms show the error inline, `/dashboard` redirects to `/login`
+  rather than throwing).
+- **Google OAuth**: also needs the Google provider enabled in Supabase Auth settings (Client ID/
+  Secret from Google Cloud Console), plus `http://localhost:3000/auth/callback` and the production
+  equivalent added to Supabase's redirect allow-list. Won't work until that's configured on the
+  Supabase side, independent of the env vars above.
+- **`proxy.ts`** (project root) — refreshes the Supabase session cookie on every request. **This is
+  not `middleware.ts`** — Next.js 16 renamed the file convention from `middleware` to `proxy`
+  (`export function proxy(...)`, not `export function middleware(...)`); the old name is silently
+  ignored, not an error, so this is an easy thing to get wrong from memory/training data. Confirmed
+  via `npm run build` output showing `ƒ Proxy (Middleware)`.
+- **`lib/supabase/client.ts`** vs **`server.ts`** — browser client (Client Components) vs
+  server client (Server Components/Route Handlers, cookie-based). Both throw a clear error if the
+  env vars are missing; callers catch that and degrade gracefully rather than crashing.
+- **`app/dashboard/page.tsx`** is a Server Component that calls `supabase.auth.getUser()` and
+  `redirect("/login")` if there's no session — real server-side gating, not just hiding a link.
+  It has `export const dynamic = "force-dynamic"` **on purpose**: without it, the very first
+  `npm run build` (with empty env vars) statically prerenders the page's *build-time* outcome
+  (a redirect to `/login`), and that static result would keep being served forever — even after
+  real keys are added and a user is actually logged in. This was a real bug caught during
+  verification (route showed as `○ Static` instead of `ƒ Dynamic` in the build output) — if any
+  other page ever branches on `supabase.auth.getUser()`, it needs the same `force-dynamic` export.
+- **`app/auth/callback/route.ts`** — lands here after Google OAuth and after clicking an email
+  confirmation/password-reset link; exchanges Supabase's one-time `code` for a real session via
+  `exchangeCodeForSession`, then redirects (`?next=` controls where — defaults to `/dashboard`).
+- **Forgot/reset password flow**: `/forgot-password` calls `resetPasswordForEmail` with
+  `redirectTo` pointed at `/auth/callback?next=/reset-password`; `/reset-password` then calls
+  `supabase.auth.updateUser({ password })` using the session that callback just established.
+- **`components/UserMenu.tsx`** (desktop) / the auth block inside `MobileMenu.tsx` — both read
+  live auth state via the shared `lib/useSupabaseUser.ts` hook (`getUser()` on mount +
+  `onAuthStateChange` subscription), so the Navbar flips between "Login" and an account
+  menu/"Log out" without a full page reload.
+- **Not done yet**: email uniqueness/rate-limit UX polish, account deletion, and avatar upload —
+  none of these were asked for, so they weren't built. The "Save changes" button on `/dashboard`
+  only updates `full_name` in `user_metadata`; email changes aren't wired (would need Supabase's
+  email-change confirmation flow).

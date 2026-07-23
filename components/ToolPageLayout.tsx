@@ -2,6 +2,7 @@ import Link from "next/link";
 import { UploadDropzone } from "./UploadDropzone";
 import { ToolSteps } from "./ToolSteps";
 import { ToolFaq } from "./ToolFaq";
+import { RecentToolTracker } from "./RecentToolTracker";
 import type { Tool } from "@/lib/tools";
 
 export function ToolPageLayout({
@@ -15,6 +16,8 @@ export function ToolPageLayout({
 }) {
   return (
     <div>
+      <RecentToolTracker slug={tool.slug} />
+
       <section className="relative overflow-hidden">
         <div
           className="pointer-events-none absolute inset-0"

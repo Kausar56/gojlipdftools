@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { ToolIcon } from "./icons";
-import { convertViaCloudConvert } from "@/lib/convertClient";
+import { ConvertError, convertViaCloudConvert } from "@/lib/convertClient";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -24,12 +25,14 @@ export function OfficeConvertWorkspace({
   const [status, setStatus] = useState<Status>("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<{ downloadUrl: string; filename: string } | null>(null);
 
   function resetOutput() {
     setResult(null);
     setStatus("idle");
     setErrorMessage("");
+    setErrorCode(undefined);
   }
 
   function loadFile(selected: File) {
@@ -41,6 +44,7 @@ export function OfficeConvertWorkspace({
     if (!file) return;
     setStatus("working");
     setErrorMessage("");
+    setErrorCode(undefined);
 
     try {
       const converted = await convertViaCloudConvert(file, inputFormat, outputFormat, setStatusMessage);
@@ -49,6 +53,7 @@ export function OfficeConvertWorkspace({
     } catch (error) {
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Couldn't convert this file.");
+      setErrorCode(error instanceof ConvertError ? error.code : undefined);
     }
   }
 
@@ -119,7 +124,19 @@ export function OfficeConvertWorkspace({
       </p>
 
       {errorMessage && (
-        <p className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>
+        <div className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">
+          <p>{errorMessage}</p>
+          {errorCode === "AUTH_REQUIRED" && (
+            <Link href="/login" className="mt-1 inline-block font-medium underline">
+              Log in
+            </Link>
+          )}
+          {(errorCode === "QUOTA_EXCEEDED" || errorCode === "FILE_TOO_LARGE") && (
+            <Link href="/pricing" className="mt-1 inline-block font-medium underline">
+              View plans
+            </Link>
+          )}
+        </div>
       )}
 
       <div className="mt-5">

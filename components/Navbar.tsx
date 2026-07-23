@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ToolIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { UserMenu } from "./UserMenu";
 import { MobileMenu } from "./MobileMenu";
 import { MegaMenu } from "./MegaMenu";
 import { tools } from "@/lib/tools";
@@ -23,6 +24,7 @@ const heroPagePaths = new Set([
   "/login",
   "/signup",
   "/forgot-password",
+  "/reset-password",
   ...tools.map((tool) => `/${tool.slug}`),
 ]);
 
@@ -91,9 +93,7 @@ export function Navbar() {
         </Link>
         <LanguageSwitcher />
         <ThemeToggle />
-        <Link href="/login" className="btn btn-primary btn-sm hidden lg:inline-flex">
-          Login
-        </Link>
+        <UserMenu />
         <MobileMenu />
       </div>
     </div>
