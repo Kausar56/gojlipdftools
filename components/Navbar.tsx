@@ -28,9 +28,15 @@ const heroPagePaths = new Set([
   ...tools.map((tool) => `/${tool.slug}`),
 ]);
 
+// The PDF editor's own toolbar already needs to stay visible while working —
+// a second sticky bar above it just eats vertical space for no benefit, so
+// the site header scrolls away normally on this page instead of staying fixed.
+const relativeHeaderPaths = new Set(["/edit-pdf"]);
+
 export function Navbar() {
   const pathname = usePathname();
   const isHeroPage = heroPagePaths.has(pathname);
+  const isRelativeHeader = relativeHeaderPaths.has(pathname);
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -47,7 +53,7 @@ export function Navbar() {
 
   return (
     <div
-      className={`navbar sticky top-0 z-40 gap-2 px-4 transition-colors sm:px-8 ${
+      className={`navbar ${isRelativeHeader ? "relative" : "sticky top-0"} z-40 gap-2 px-4 transition-colors sm:px-8 ${
         blended
           ? "border-b border-transparent bg-transparent"
           : "border-b border-base-300 bg-base-100/80 shadow-sm backdrop-blur-md"

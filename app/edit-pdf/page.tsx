@@ -12,6 +12,6 @@ export const metadata: Metadata = {
 
 export default function EditPdfPage() {
   return (
-    <ToolPageLayout tool={tool} maxWidthClassName="max-w-6xl" workspace={<PdfEditorWorkspace />} />
+    <ToolPageLayout tool={tool} maxWidthClassName="max-w-7xl" workspace={<PdfEditorWorkspace />} />
   );
 }

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
-import { colorSwatches, hexToRgbFloat, type ColorSwatchId } from "@/lib/colorSwatches";
+import { colorSwatches, hexToRgbFloat, resolveSwatchHex, type ColorSwatchId } from "@/lib/colorSwatches";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -40,7 +40,7 @@ export function WatermarkPdfWorkspace() {
       const bytes = await file.arrayBuffer();
       const doc = await PDFDocument.load(bytes);
       const font = await doc.embedFont(StandardFonts.HelveticaBold);
-      const [r, g, b] = hexToRgbFloat(activeSwatch.hex);
+      const [r, g, b] = hexToRgbFloat(resolveSwatchHex(activeSwatch.id));
 
       doc.getPages().forEach((page) => {
         const { width, height } = page.getSize();
@@ -129,7 +129,7 @@ export function WatermarkPdfWorkspace() {
             <span
               className="whitespace-nowrap text-xs font-bold"
               style={{
-                color: activeSwatch.hex,
+                color: resolveSwatchHex(activeSwatch.id),
                 opacity: opacity / 100,
                 transform: "rotate(-45deg)",
               }}
