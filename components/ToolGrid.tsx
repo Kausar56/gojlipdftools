@@ -15,7 +15,7 @@ const MOST_POPULAR_SLUGS = [
   "protect-pdf",
 ];
 
-function DisabledToolCard({ label }: { label: string }) {
+function DisabledToolCard({ label, description }: { label: string; description?: string }) {
   return (
     <div
       aria-disabled="true"
@@ -26,7 +26,7 @@ function DisabledToolCard({ label }: { label: string }) {
         <ToolIcon name="file" className="h-5 w-5" />
       </span>
       <h3 className="mt-3 text-base font-semibold text-base-content/60">{label}</h3>
-      <p className="mt-1 text-sm text-base-content/40">Coming soon.</p>
+      <p className="mt-1 line-clamp-1 text-sm text-base-content/40">{description ?? "Coming soon."}</p>
     </div>
   );
 }
@@ -50,20 +50,27 @@ export function ToolGrid({ tools }: { tools: Tool[] }) {
         </div>
       </div>
 
-      {megaMenu.map((category, categoryIndex) => (
-        <Reveal key={category.title} delayMs={Math.min(categoryIndex, 6) * 60}>
-          <h3 className="mb-4 text-lg font-semibold text-base-content">{category.title}</h3>
+      {megaMenu.map((category) => (
+        <div key={category.title}>
+          <Reveal>
+            <h3 className="mb-4 text-lg font-semibold text-base-content">{category.title}</h3>
+          </Reveal>
+          {/* Each card gets its own Reveal (like Most Popular above) instead of
+              one Reveal wrapping the whole category — animating the entire
+              heading+grid block as a single unit meant every card in a
+              category popped in together as one lump instead of a smooth,
+              staggered per-card reveal. */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {category.items.map((item) => {
+            {category.items.map((item, index) => {
               const tool = item.slug ? bySlug.get(item.slug) : undefined;
-              return tool ? (
-                <ToolCard key={item.label} tool={tool} />
-              ) : (
-                <DisabledToolCard key={item.label} label={item.label} />
+              return (
+                <Reveal key={item.label} delayMs={Math.min(index, 7) * 60}>
+                  {tool ? <ToolCard tool={tool} /> : <DisabledToolCard label={item.label} description={item.description} />}
+                </Reveal>
               );
             })}
           </div>
-        </Reveal>
+        </div>
       ))}
     </div>
   );

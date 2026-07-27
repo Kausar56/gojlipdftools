@@ -426,6 +426,38 @@ export const tools: Tool[] = [
       { question: "Does it apply to every page?", answer: "Yes, by default it's stamped on every page, though page-range control is planned." },
     ],
   },
+  {
+    slug: "ocr",
+    name: "OCR",
+    shortDescription: "Make scanned pages searchable and selectable text.",
+    heroDescription: "Make scanned pages searchable and selectable text.",
+    accent: "secondary",
+    category: "core",
+    icon: "ocr",
+    accept: "application/pdf",
+    guideIntro:
+      "A scanned PDF is really just a picture of a page — you can't select, search, or copy its text. Gojli's OCR tool recognizes the text in scanned pages and adds an invisible, searchable text layer on top, entirely in your browser.",
+    guideSteps: [
+      {
+        title: "Upload the scanned PDF",
+        description: "Choose the PDF with scanned or image-based pages you want to make searchable.",
+      },
+      {
+        title: "Let Gojli recognize the text",
+        description:
+          "Each page is analyzed locally in your browser to recognize its text and word positions — nothing is uploaded to a server.",
+      },
+      {
+        title: "Download your searchable PDF",
+        description: "Download the same PDF with an invisible text layer added, so you can now select, search, and copy its content.",
+      },
+    ],
+    faqs: [
+      { question: "Does this change how the PDF looks?", answer: "No, the visible page is untouched — a searchable text layer is added underneath, invisibly." },
+      { question: "How accurate is the recognized text?", answer: "It depends on scan quality — clean, high-resolution scans recognize much more accurately than blurry or skewed ones." },
+      { question: "Which languages are supported?", answer: "English and Bengali are supported to start, with more planned." },
+    ],
+  },
 ];
 
 export function getToolBySlug(slug: string): Tool | undefined {

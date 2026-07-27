@@ -4,6 +4,14 @@ type IconProps = {
 
 const paths: Record<string, React.ReactNode> = {
   cloud: <path d="M6.5 19a4.5 4.5 0 0 1-.4-8.98A6 6 0 0 1 18 12a4 4 0 0 1 0 8H6.5z" />,
+  ocr: (
+    <>
+      <rect x="4" y="4" width="12" height="16" rx="1.5" />
+      <path d="M7 9h6M7 13h4" />
+      <circle cx="17" cy="17" r="3.2" />
+      <path d="M19.5 19.5L22 22" />
+    </>
+  ),
   file: (
     <>
       <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
