@@ -2,12 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
+import { TextEditToolbar } from "./TextEditToolbar";
+import { ShapeEditToolbar } from "./ShapeEditToolbar";
 import { SignaturePad } from "./SignaturePad";
+import { FindReplacePanel } from "./FindReplacePanel";
+import { ToolbarDropdown } from "./ToolbarDropdown";
 import { colorSwatches, hexToRgbFloat, resolveSwatchHex } from "@/lib/colorSwatches";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { createElementId, type DetectedTextItem, type EditorElement, type Point } from "@/lib/editorElements";
 import {
   sampleTextBackgroundColor,
+  sampleTextInkColor,
   getReadableTextColor,
   guessFontFamily,
   guessIsBold,
@@ -36,6 +41,22 @@ type ToolId =
   | "erase";
 type ShapeType = "rectangle" | "circle" | "line";
 
+type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+// 8 handles around a box — each keeps the *opposite* edge anchored while
+// dragging (see startElementResize), so resizing from any corner or edge
+// feels natural instead of the box always re-anchoring at its top-left.
+const RESIZE_HANDLES: { dir: ResizeHandle; position: string; cursor: string }[] = [
+  { dir: "nw", position: "-top-1.5 -left-1.5", cursor: "cursor-nwse-resize" },
+  { dir: "n", position: "-top-1.5 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
+  { dir: "ne", position: "-top-1.5 -right-1.5", cursor: "cursor-nesw-resize" },
+  { dir: "e", position: "top-1/2 -right-1.5 -translate-y-1/2", cursor: "cursor-ew-resize" },
+  { dir: "se", position: "-bottom-1.5 -right-1.5", cursor: "cursor-nwse-resize" },
+  { dir: "s", position: "-bottom-1.5 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
+  { dir: "sw", position: "-bottom-1.5 -left-1.5", cursor: "cursor-nesw-resize" },
+  { dir: "w", position: "top-1/2 -left-1.5 -translate-y-1/2", cursor: "cursor-ew-resize" },
+];
+
 const shapeTypes: { id: ShapeType; icon: string; label: string }[] = [
   { id: "rectangle", icon: "shape-rect", label: "Rectangle" },
   { id: "circle", icon: "shape-circle", label: "Circle" },
@@ -61,7 +82,11 @@ const formFieldTypes: { id: "form-text" | "form-multiline" | "form-dropdown" | "
   { id: "form-checkbox", icon: "checkbox", label: "Checkbox" },
 ];
 
-const toolsWithColor = new Set<ToolId>(["text", "draw", "shapes", "highlight", "stamp-x", "stamp-check", "stamp-dot"]);
+// "shapes" is intentionally excluded — border/fill color is now set per-shape
+// via the floating ShapeEditToolbar right after it's placed (shapes auto-select
+// on creation), so a default-color picker in the persistent toolbar duplicated
+// that and was one extra, unnecessary step.
+const toolsWithColor = new Set<ToolId>(["text", "draw", "highlight", "stamp-x", "stamp-check", "stamp-dot"]);
 const CLICK_TO_ADD: ToolId[] = [
   "text",
   "shapes",
@@ -79,6 +104,115 @@ const CLICK_TO_ADD: ToolId[] = [
 ];
 const ASCENT_RATIO = 0.8;
 const CONTAINER_PADDING_PX = 48;
+// Fixed render scale used only for detecting text on pages the viewer isn't
+// currently showing (Find & Replace scans every page) — independent of
+// whatever zoom the visible page happens to be at, and irrelevant to the
+// output since DetectedTextItem coordinates are stored in PDF points, not
+// pixels; this just needs to be high enough for reliable color sampling.
+const OFFSCREEN_RENDER_SCALE = 2;
+
+/**
+ * Extracted from the main per-page render effect so Find & Replace can reuse
+ * the exact same detection (position, background/ink color, font family,
+ * bold/italic) for pages other than the one currently on screen.
+ */
+async function detectTextItems(
+  page: import("pdfjs-dist").PDFPageProxy,
+  ctx: CanvasRenderingContext2D,
+  pageHeightPt: number,
+  renderScale: number,
+): Promise<DetectedTextItem[]> {
+  const content = await page.getTextContent();
+  const detected: DetectedTextItem[] = [];
+  content.items.forEach((item, itemIndex) => {
+    if (!("str" in item) || !item.str.trim()) return;
+    const t = item.transform;
+    const isAxisAligned = Math.abs(t[1]) < 0.01 && Math.abs(t[2]) < 0.01;
+    if (!isAxisAligned) return;
+
+    const fontSizePt = Math.abs(t[3]);
+    const baselinePt = t[5];
+    const xPt = t[4];
+    const widthPt = item.width;
+    const heightPt = item.height || fontSizePt;
+    const topPt = pageHeightPt - (baselinePt + fontSizePt * ASCENT_RATIO);
+
+    const bgColorHex = sampleTextBackgroundColor(
+      ctx,
+      xPt * renderScale,
+      topPt * renderScale,
+      widthPt * renderScale,
+      heightPt * renderScale,
+    );
+    const inkColorHex = sampleTextInkColor(
+      ctx,
+      xPt * renderScale,
+      topPt * renderScale,
+      widthPt * renderScale,
+      heightPt * renderScale,
+      bgColorHex,
+    );
+    const fontFamily = "fontName" in item ? content.styles[item.fontName]?.fontFamily : undefined;
+    const familyGuess = guessFontFamily(fontFamily);
+
+    let fontObjBold = false;
+    let fontObjItalic = false;
+    let nameBold = false;
+    let nameItalic = false;
+    if ("fontName" in item) {
+      try {
+        const fontObj = page.commonObjs.get(item.fontName) as { bold?: boolean; italic?: boolean; name?: string };
+        fontObjBold = Boolean(fontObj?.bold);
+        fontObjItalic = Boolean(fontObj?.italic);
+        if (fontObj?.name) {
+          nameBold = /bold/i.test(fontObj.name);
+          nameItalic = /italic|oblique/i.test(fontObj.name);
+        }
+      } catch {
+        // Font not resolved yet.
+      }
+    }
+    const isBold = fontObjBold || nameBold || guessIsBold(item.str, fontSizePt, widthPt, familyGuess);
+    const isItalic = fontObjItalic || nameItalic;
+
+    detected.push({
+      itemIndex,
+      xPt,
+      topPt,
+      widthPt,
+      heightPt,
+      baselinePt,
+      fontSizePt,
+      str: item.str,
+      bgColorHex,
+      inkColorHex,
+      fontFamily: familyGuess,
+      isBold,
+      isItalic,
+    });
+  });
+  return detected;
+}
+
+/** Renders a page off-screen (never touches the visible canvas) purely to run
+ *  detectTextItems on it — used by Find & Replace to scan pages other than
+ *  the one currently displayed. */
+async function renderAndDetectPage(
+  pdfDoc: import("pdfjs-dist").PDFDocumentProxy,
+  pageIndex: number,
+): Promise<DetectedTextItem[]> {
+  const page = await pdfDoc.getPage(pageIndex + 1);
+  const baseViewport = page.getViewport({ scale: 1 });
+  const viewport = page.getViewport({ scale: OFFSCREEN_RENDER_SCALE });
+  const canvas = document.createElement("canvas");
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+  const renderTask = page.render({ canvas, canvasContext: ctx, viewport });
+  await renderTask.promise;
+  return detectTextItems(page, ctx, baseViewport.height, OFFSCREEN_RENDER_SCALE);
+}
 
 export function PdfEditorWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +234,19 @@ export function PdfEditorWorkspace() {
   const [zoomPercent, setZoomPercent] = useState(100);
   const [isRendering, setIsRendering] = useState(false);
   const [textItems, setTextItems] = useState<DetectedTextItem[]>([]);
+
+  const [showFindReplace, setShowFindReplace] = useState(false);
+  const [isIndexingSearch, setIsIndexingSearch] = useState(false);
+  // One entry per page, each holding that page's detected text items — null
+  // pages haven't been scanned yet. Rebuilt fresh whenever the panel opens, so
+  // it can't go stale against edits made since it was last built.
+  const [searchIndexByPage, setSearchIndexByPage] = useState<DetectedTextItem[][]>([]);
+  const [findQuery, setFindQuery] = useState("");
+  const [replaceQuery, setReplaceQuery] = useState("");
+  const [matchCase, setMatchCase] = useState(false);
+  // itemIndex+pageIndex pairs that have already been replaced this session —
+  // filtered out of the live match list without needing to re-scan.
+  const [replacedKeys, setReplacedKeys] = useState<Set<string>>(new Set());
 
   const [activeTool, setActiveTool] = useState<ToolId>("cursor");
   const [activeColorHex, setActiveColorHex] = useState<string>(() => resolveSwatchHex(colorSwatches[0].id));
@@ -225,45 +372,7 @@ export function PdfEditorWorkspace() {
       if (cancelled) return;
 
       const pageHeightPt = baseViewport.height;
-      const content = await page.getTextContent();
-      const detected: DetectedTextItem[] = [];
-      content.items.forEach((item, itemIndex) => {
-        if (!("str" in item) || !item.str.trim()) return;
-        const t = item.transform;
-        const isAxisAligned = Math.abs(t[1]) < 0.01 && Math.abs(t[2]) < 0.01;
-        if (!isAxisAligned) return;
-
-        const fontSizePt = Math.abs(t[3]);
-        const baselinePt = t[5];
-        const xPt = t[4];
-        const widthPt = item.width;
-        const heightPt = item.height || fontSizePt;
-        const topPt = pageHeightPt - (baselinePt + fontSizePt * ASCENT_RATIO);
-
-        const bgColorHex = sampleTextBackgroundColor(
-          ctx,
-          xPt * renderScale,
-          topPt * renderScale,
-          widthPt * renderScale,
-          heightPt * renderScale,
-        );
-        const fontFamily = "fontName" in item ? content.styles[item.fontName]?.fontFamily : undefined;
-        const familyGuess = guessFontFamily(fontFamily);
-
-        detected.push({
-          itemIndex,
-          xPt,
-          topPt,
-          widthPt,
-          heightPt,
-          baselinePt,
-          fontSizePt,
-          str: item.str,
-          bgColorHex,
-          fontFamily: familyGuess,
-          isBold: guessIsBold(item.str, fontSizePt, widthPt, familyGuess),
-        });
-      });
+      const detected = await detectTextItems(page, ctx, pageHeightPt, renderScale);
       if (cancelled) return;
 
       setTextItems(detected);
@@ -332,7 +441,35 @@ export function PdfEditorWorkspace() {
   }
 
   function updateElement(id: string, patch: Partial<EditorElement>) {
-    setElements((prev) => prev.map((el) => (el.id === id ? ({ ...el, ...patch } as EditorElement) : el)));
+    setElements((prev) =>
+      prev.map((el) => {
+        if (el.id !== id) return el;
+        // Growing the font size (e.g. via the floating toolbar's +/- stepper)
+        // without also growing the box left the old fixed width/height too
+        // small for the now-larger glyphs — the textarea's overflow-x-hidden
+        // clipped the tail of the text, and its default overflow-y showed a
+        // scrollbar once the taller line no longer fit the unchanged height.
+        // Re-measuring here keeps the box sized to whatever the text actually
+        // needs at its current font size.
+        if (
+          (el.type === "text" || el.type === "text-edit") &&
+          "fontSizePt" in patch &&
+          typeof patch.fontSizePt === "number" &&
+          patch.fontSizePt !== el.fontSizePt &&
+          el.fontSizePt > 0
+        ) {
+          const newFontSizePt = patch.fontSizePt;
+          const isBold = "isBold" in patch && typeof patch.isBold === "boolean" ? patch.isBold : el.isBold;
+          const measuredWidthPt = measureTextWidthPt(el.text, newFontSizePt, el.fontFamily as FontFamilyGuess, isBold);
+          if (el.type === "text-edit") {
+            const ratio = newFontSizePt / el.fontSizePt;
+            return { ...el, ...patch, widthPt: Math.max(20, measuredWidthPt), heightPt: el.heightPt * ratio } as EditorElement;
+          }
+          return { ...el, ...patch, widthPt: Math.max(20, measuredWidthPt) } as EditorElement;
+        }
+        return { ...el, ...patch } as EditorElement;
+      }),
+    );
   }
 
   function removeElement(id: string) {
@@ -351,28 +488,102 @@ export function PdfEditorWorkspace() {
     setSelectedElementId(id);
   }
 
-  function activateTextItem(item: DetectedTextItem) {
+  function duplicateShapeElement(el: Extract<EditorElement, { type: "rect" | "ellipse" }>) {
     const id = createElementId();
-    addElement({
+    pushHistory();
+    setElements((prev) => [...prev, { ...el, id, xPt: el.xPt + 12, yPt: el.yPt + 12 }]);
+    setSelectedElementId(id);
+  }
+
+  function buildTextEditElement(item: DetectedTextItem, pageIndex: number, text: string): EditorElement {
+    const id = createElementId();
+    // item.widthPt is pdf.js's measurement of the original text in its real
+    // (possibly embedded) PDF font — but the editing textarea renders with a
+    // CSS font substitute (Helvetica/Georgia/Courier), which can be wider for
+    // the same string/size. Using item.widthPt as-is could start the box too
+    // narrow for how it's about to actually render, clipping the tail of the
+    // text the moment it's focused, before any edit is even made.
+    const renderedWidthPt = Math.max(
+      item.widthPt,
+      measureTextWidthPt(text, item.fontSizePt, item.fontFamily as FontFamilyGuess, item.isBold),
+    );
+    return {
       id,
-      pageIndex: currentPage,
+      pageIndex,
       type: "text-edit",
       itemIndex: item.itemIndex,
       xPt: item.xPt,
       topPt: item.topPt,
-      widthPt: item.widthPt,
+      widthPt: renderedWidthPt,
+      // Deliberately the TRUE pdf.js-detected width, not renderedWidthPt above —
+      // this is the floor the background mask should never exceed just because
+      // the editing textarea needed extra room for a wider CSS font substitute.
+      // Using renderedWidthPt here made the mask visibly wider than the real
+      // original background region whenever the CSS fallback font rendered
+      // wider than the actual (possibly embedded) PDF font, overflowing onto
+      // whatever different-colored content sat just past the real text.
       originalWidthPt: item.widthPt,
       heightPt: item.heightPt,
       baselinePt: item.baselinePt,
       fontSizePt: item.fontSizePt,
-      text: item.str,
-      color: getReadableTextColor(item.bgColorHex),
+      text,
+      color: item.inkColorHex ?? getReadableTextColor(item.bgColorHex),
       bgColorHex: item.bgColorHex,
       fontFamily: item.fontFamily,
       isBold: item.isBold,
-      isItalic: false,
+      isItalic: item.isItalic,
+    };
+  }
+
+  function activateTextItem(item: DetectedTextItem) {
+    const el = buildTextEditElement(item, currentPage, item.str);
+    addElement(el);
+    setSelectedElementId(el.id);
+  }
+
+  async function openFindReplace() {
+    setShowFindReplace(true);
+    if (!pdfDoc) return;
+    setIsIndexingSearch(true);
+    const perPage: DetectedTextItem[][] = [];
+    for (let i = 0; i < pageCount; i++) {
+      perPage.push(i === currentPage ? textItems : await renderAndDetectPage(pdfDoc, i));
+    }
+    setSearchIndexByPage(perPage);
+    setReplacedKeys(new Set());
+    setIsIndexingSearch(false);
+  }
+
+  function matchKey(pageIndex: number, itemIndex: number) {
+    return `${pageIndex}:${itemIndex}`;
+  }
+
+  function findAllMatches(): { pageIndex: number; item: DetectedTextItem }[] {
+    const needle = findQuery.trim();
+    if (!needle) return [];
+    const needleCmp = matchCase ? needle : needle.toLowerCase();
+    const matches: { pageIndex: number; item: DetectedTextItem }[] = [];
+    searchIndexByPage.forEach((items, pageIndex) => {
+      items.forEach((item) => {
+        if (replacedKeys.has(matchKey(pageIndex, item.itemIndex))) return;
+        const haystack = matchCase ? item.str : item.str.toLowerCase();
+        if (haystack.includes(needleCmp)) matches.push({ pageIndex, item });
+      });
     });
-    setSelectedElementId(id);
+    return matches;
+  }
+
+  function replaceMatch(match: { pageIndex: number; item: DetectedTextItem }) {
+    const needle = matchCase ? findQuery.trim() : findQuery.trim().toLowerCase();
+    const flags = matchCase ? "g" : "gi";
+    const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const newText = match.item.str.replace(new RegExp(escaped, flags), replaceQuery);
+    addElement(buildTextEditElement(match.item, match.pageIndex, newText));
+    setReplacedKeys((prev) => new Set(prev).add(matchKey(match.pageIndex, match.item.itemIndex)));
+  }
+
+  function replaceAllMatches() {
+    findAllMatches().forEach(replaceMatch);
   }
 
   function startPan(event: React.MouseEvent) {
@@ -438,8 +649,9 @@ export function PdfEditorWorkspace() {
       });
       setSelectedElementId(id);
     } else if (activeTool === "shapes") {
+      const id = createElementId();
       addElement({
-        id: createElementId(),
+        id,
         pageIndex: currentPage,
         type: shapeType === "circle" ? "ellipse" : "rect",
         xPt: point.x - 60,
@@ -447,7 +659,10 @@ export function PdfEditorWorkspace() {
         widthPt: 120,
         heightPt: 80,
         color: activeColorHex,
+        strokeWidthPt: 2,
+        fillColorHex: null,
       });
+      setSelectedElementId(id);
     } else if (activeTool === "highlight") {
       addElement({
         id: createElementId(),
@@ -602,10 +817,6 @@ export function PdfEditorWorkspace() {
       return;
     }
     if (el.type === "path" || el.type === "text-edit" || el.type === "line") return;
-    if (el.type === "text" && activeTool === "cursor") {
-      // allow clicking into the textarea without initiating a drag
-      return;
-    }
 
     pushHistory();
 
@@ -627,7 +838,14 @@ export function PdfEditorWorkspace() {
     window.addEventListener("mouseup", onUp);
   }
 
-  function startElementResize(el: EditorElement, event: React.MouseEvent) {
+  // Handle defaults to "se" (bottom-right, growing away from the fixed
+  // top-left corner) — that's the only handle text boxes render, and the only
+  // one shapes rendered before they grew the other 7. For shapes, each of the
+  // 8 handles keeps the *opposite* edge anchored (e.g. dragging the west/left
+  // handle keeps the right edge fixed and moves xPt), which is what makes
+  // resizing from any corner or edge feel natural instead of the box always
+  // jumping to re-anchor at its top-left.
+  function startElementResize(el: EditorElement, event: React.MouseEvent, handle: ResizeHandle = "se") {
     event.stopPropagation();
     if (el.type === "path" || el.type === "text-edit" || el.type === "line") return;
 
@@ -636,6 +854,8 @@ export function PdfEditorWorkspace() {
     const startX = event.clientX;
     const startY = event.clientY;
     const startWidth = el.widthPt;
+    const startXPt = el.xPt;
+    const startYPt = el.yPt;
     const isText = el.type === "text";
     const startHeight = !isText ? el.heightPt : 0;
     const startFontSize = isText ? el.fontSizePt : 0;
@@ -650,11 +870,30 @@ export function PdfEditorWorkspace() {
         const newFontSize = Math.max(8, Math.min(160, startFontSize + dyPt));
         const ratio = newFontSize / startFontSize;
         updateElement(el.id, { fontSizePt: newFontSize, widthPt: Math.max(20, startWidth * ratio) });
-      } else {
-        const newWidth = Math.max(20, startWidth + dxPt);
-        const newHeight = Math.max(20, startHeight + dyPt);
-        updateElement(el.id, { widthPt: newWidth, heightPt: newHeight });
+        return;
       }
+
+      const patch: { xPt?: number; yPt?: number; widthPt?: number; heightPt?: number } = {};
+      const west = handle === "w" || handle === "nw" || handle === "sw";
+      const east = handle === "e" || handle === "ne" || handle === "se";
+      const north = handle === "n" || handle === "ne" || handle === "nw";
+      const south = handle === "s" || handle === "se" || handle === "sw";
+
+      if (east) {
+        patch.widthPt = Math.max(20, startWidth + dxPt);
+      } else if (west) {
+        const newWidth = Math.max(20, startWidth - dxPt);
+        patch.widthPt = newWidth;
+        patch.xPt = startXPt + (startWidth - newWidth);
+      }
+      if (south) {
+        patch.heightPt = Math.max(20, startHeight + dyPt);
+      } else if (north) {
+        const newHeight = Math.max(20, startHeight - dyPt);
+        patch.heightPt = newHeight;
+        patch.yPt = startYPt + (startHeight - newHeight);
+      }
+      updateElement(el.id, patch as Partial<EditorElement>);
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
@@ -871,13 +1110,14 @@ export function PdfEditorWorkspace() {
             maxWidth: el.widthPt,
           });
         } else if (el.type === "rect") {
+          const fill = el.fillColorHex ? hexToRgbFloat(el.fillColorHex) : null;
           page.drawRectangle({
             x: el.xPt,
             y: pageHeightPt - el.yPt - el.heightPt,
             width: el.widthPt,
             height: el.heightPt,
-            borderColor: rgb(r, g, b),
-            borderWidth: 2,
+            ...(el.strokeWidthPt > 0 ? { borderColor: rgb(r, g, b), borderWidth: el.strokeWidthPt } : {}),
+            ...(fill ? { color: rgb(fill[0], fill[1], fill[2]) } : {}),
           });
         } else if (el.type === "highlight") {
           page.drawRectangle({
@@ -889,13 +1129,14 @@ export function PdfEditorWorkspace() {
             opacity: 0.35,
           });
         } else if (el.type === "ellipse") {
+          const fill = el.fillColorHex ? hexToRgbFloat(el.fillColorHex) : null;
           page.drawEllipse({
             x: el.xPt + el.widthPt / 2,
             y: pageHeightPt - el.yPt - el.heightPt / 2,
             xScale: el.widthPt / 2,
             yScale: el.heightPt / 2,
-            borderColor: rgb(r, g, b),
-            borderWidth: 2,
+            ...(el.strokeWidthPt > 0 ? { borderColor: rgb(r, g, b), borderWidth: el.strokeWidthPt } : {}),
+            ...(fill ? { color: rgb(fill[0], fill[1], fill[2]) } : {}),
           });
         } else if (el.type === "line") {
           page.drawLine({
@@ -1109,11 +1350,40 @@ export function PdfEditorWorkspace() {
       ? selectedTextElement.topPt
       : selectedTextElement.yPt
     : 0;
+  // "text" boxes have no stored height (sized by the textarea's own content), so
+  // approximate one from font size using the same line-height factor used to set
+  // the textarea's minHeight below — good enough for deciding whether the
+  // toolbar should flip below the text instead of above it.
+  const selectedTextHeightPt = selectedTextElement
+    ? selectedTextElement.type === "text-edit"
+      ? selectedTextElement.heightPt
+      : selectedTextElement.fontSizePt * 1.4
+    : 0;
+  const selectedShapeElement =
+    selectedElement && (selectedElement.type === "rect" || selectedElement.type === "ellipse") ? selectedElement : undefined;
+  const searchMatches = findAllMatches();
 
   return (
     <div ref={workspaceRef} className="rounded-2xl border border-base-300 bg-base-100">
       {showSignaturePad && (
         <SignaturePad onConfirm={handleSignatureConfirm} onCancel={() => setShowSignaturePad(false)} />
+      )}
+
+      {showFindReplace && (
+        <FindReplacePanel
+          findQuery={findQuery}
+          replaceQuery={replaceQuery}
+          matchCase={matchCase}
+          matches={searchMatches}
+          isIndexing={isIndexingSearch}
+          onFindQueryChange={setFindQuery}
+          onReplaceQueryChange={setReplaceQuery}
+          onMatchCaseChange={setMatchCase}
+          onReplace={replaceMatch}
+          onReplaceAll={replaceAllMatches}
+          onJumpToPage={setCurrentPage}
+          onClose={() => setShowFindReplace(false)}
+        />
       )}
 
       {/* Filename/Save bar — stays in normal flow (not pinned) even once the toolbar
@@ -1169,7 +1439,12 @@ export function PdfEditorWorkspace() {
         style={toolbarPinned && toolbarBounds ? { left: toolbarBounds.left, width: toolbarBounds.width } : undefined}
       >
 
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-base-300 px-4 py-2">
+      {/* Horizontally scrollable instead of wrapping — on a narrow/phone
+          viewport, wrapping this many tool buttons onto several lines ate a
+          lot of vertical space before the page content even started; a
+          single scrollable row keeps the toolbar's height constant and lets
+          touch/scroll reach whatever tool isn't currently visible. */}
+      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-base-300 px-4 py-2 *:shrink-0">
         <button
           type="button"
           onClick={() => handleToolClick("cursor")}
@@ -1197,54 +1472,57 @@ export function PdfEditorWorkspace() {
           Links
         </button>
 
-        <div className="dropdown">
-          <div
-            tabIndex={0}
-            role="button"
-            className={`btn btn-sm gap-1.5 ${
-              [...stampTypes, ...formFieldTypes].some((t) => t.id === activeTool) ? "btn-primary" : "btn-ghost"
-            }`}
-          >
-            <ToolIcon name="form-field" className="h-4 w-4" />
-            Forms
-            <ToolIcon name="chevron-down" className="h-3 w-3" />
-          </div>
-          <ul tabIndex={0} className="dropdown-content menu z-30 w-56 rounded-box bg-base-100 p-2 shadow-lg">
-            <li className="menu-title text-[10px] tracking-wide uppercase">Add text and symbols</li>
-            {stampTypes.map((stampTool) => (
-              <li key={stampTool.id}>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    handleToolClick(stampTool.id);
-                    event.currentTarget.blur();
-                  }}
-                  className={activeTool === stampTool.id ? "active" : ""}
-                >
-                  <ToolIcon name={stampTool.icon} className="h-4 w-4" />
-                  {stampTool.label}
-                </button>
-              </li>
-            ))}
+        <ToolbarDropdown
+          triggerClassName={`btn btn-sm gap-1.5 ${
+            [...stampTypes, ...formFieldTypes].some((t) => t.id === activeTool) ? "btn-primary" : "btn-ghost"
+          }`}
+          menuClassName="w-56"
+          trigger={
+            <>
+              <ToolIcon name="form-field" className="h-4 w-4" />
+              Forms
+              <ToolIcon name="chevron-down" className="h-3 w-3" />
+            </>
+          }
+        >
+          {(close) => (
+            <ul>
+              <li className="menu-title text-[10px] tracking-wide uppercase">Add text and symbols</li>
+              {stampTypes.map((stampTool) => (
+                <li key={stampTool.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleToolClick(stampTool.id);
+                      close();
+                    }}
+                    className={activeTool === stampTool.id ? "active" : ""}
+                  >
+                    <ToolIcon name={stampTool.icon} className="h-4 w-4" />
+                    {stampTool.label}
+                  </button>
+                </li>
+              ))}
 
-            <li className="menu-title mt-1 text-[10px] tracking-wide uppercase">Add new form fields</li>
-            {formFieldTypes.map((formTool) => (
-              <li key={formTool.id}>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    handleToolClick(formTool.id);
-                    event.currentTarget.blur();
-                  }}
-                  className={activeTool === formTool.id ? "active" : ""}
-                >
-                  <ToolIcon name={formTool.icon} className="h-4 w-4" />
-                  {formTool.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+              <li className="menu-title mt-1 text-[10px] tracking-wide uppercase">Add new form fields</li>
+              {formFieldTypes.map((formTool) => (
+                <li key={formTool.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleToolClick(formTool.id);
+                      close();
+                    }}
+                    className={activeTool === formTool.id ? "active" : ""}
+                  >
+                    <ToolIcon name={formTool.icon} className="h-4 w-4" />
+                    {formTool.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ToolbarDropdown>
 
         <button
           type="button"
@@ -1273,64 +1551,70 @@ export function PdfEditorWorkspace() {
           Whiteout
         </button>
 
-        <div className="dropdown">
-          <div
-            tabIndex={0}
-            role="button"
-            className={`btn btn-sm gap-1.5 ${annotateTypes.some((t) => t.id === activeTool) ? "btn-primary" : "btn-ghost"}`}
-          >
-            <ToolIcon name="pen" className="h-4 w-4" />
-            Annotate
-            <ToolIcon name="chevron-down" className="h-3 w-3" />
-          </div>
-          <ul tabIndex={0} className="dropdown-content menu z-30 w-44 rounded-box bg-base-100 p-2 shadow-lg">
-            {annotateTypes.map((annotateTool) => (
-              <li key={annotateTool.id}>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    handleToolClick(annotateTool.id);
-                    event.currentTarget.blur();
-                  }}
-                  className={activeTool === annotateTool.id ? "active" : ""}
-                >
-                  <ToolIcon name={annotateTool.icon} className="h-4 w-4" />
-                  {annotateTool.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ToolbarDropdown
+          triggerClassName={`btn btn-sm gap-1.5 ${annotateTypes.some((t) => t.id === activeTool) ? "btn-primary" : "btn-ghost"}`}
+          menuClassName="w-44"
+          trigger={
+            <>
+              <ToolIcon name="pen" className="h-4 w-4" />
+              Annotate
+              <ToolIcon name="chevron-down" className="h-3 w-3" />
+            </>
+          }
+        >
+          {(close) => (
+            <ul>
+              {annotateTypes.map((annotateTool) => (
+                <li key={annotateTool.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleToolClick(annotateTool.id);
+                      close();
+                    }}
+                    className={activeTool === annotateTool.id ? "active" : ""}
+                  >
+                    <ToolIcon name={annotateTool.icon} className="h-4 w-4" />
+                    {annotateTool.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ToolbarDropdown>
 
-        <div className="dropdown">
-          <div
-            tabIndex={0}
-            role="button"
-            className={`btn btn-sm gap-1.5 ${activeTool === "shapes" ? "btn-primary" : "btn-ghost"}`}
-          >
-            <ToolIcon name="shapes" className="h-4 w-4" />
-            Shapes
-            <ToolIcon name="chevron-down" className="h-3 w-3" />
-          </div>
-          <ul tabIndex={0} className="dropdown-content menu z-30 w-44 rounded-box bg-base-100 p-2 shadow-lg">
-            {shapeTypes.map((shape) => (
-              <li key={shape.id}>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    setActiveTool("shapes");
-                    setShapeType(shape.id);
-                    event.currentTarget.blur();
-                  }}
-                  className={activeTool === "shapes" && shapeType === shape.id ? "active" : ""}
-                >
-                  <ToolIcon name={shape.icon} className="h-4 w-4" />
-                  {shape.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ToolbarDropdown
+          triggerClassName={`btn btn-sm gap-1.5 ${activeTool === "shapes" ? "btn-primary" : "btn-ghost"}`}
+          menuClassName="w-44"
+          trigger={
+            <>
+              <ToolIcon name="shapes" className="h-4 w-4" />
+              Shapes
+              <ToolIcon name="chevron-down" className="h-3 w-3" />
+            </>
+          }
+        >
+          {(close) => (
+            <ul>
+              {shapeTypes.map((shape) => (
+                <li key={shape.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTool("shapes");
+                      setShapeType(shape.id);
+                      close();
+                    }}
+                    className={activeTool === "shapes" && shapeType === shape.id ? "active" : ""}
+                  >
+                    <ToolIcon name={shape.icon} className="h-4 w-4" />
+                    {shape.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ToolbarDropdown>
 
         <button
           type="button"
@@ -1360,6 +1644,15 @@ export function PdfEditorWorkspace() {
             aria-label="Redo"
           >
             <ToolIcon name="redo" className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={openFindReplace}
+            className={`btn btn-xs btn-square ${showFindReplace ? "btn-primary" : "btn-ghost"}`}
+            aria-label="Find and replace"
+            title="Find and replace"
+          >
+            <ToolIcon name="search" className="h-4 w-4" />
           </button>
         </div>
 
@@ -1727,7 +2020,12 @@ export function PdfEditorWorkspace() {
                         // with the box's fixed height, auto-scroll to hide the first line —
                         // the browser's UI font also just renders wider than most PDF fonts at
                         // the same size, so even same-length replacements can trigger this.
-                        className="h-full w-full resize-none overflow-x-hidden whitespace-pre border border-dashed border-transparent bg-transparent leading-none outline-none hover:border-base-content/20 focus:border-primary/50"
+                        // overflow-hidden (not just -x) — the box's height is derived from
+                        // pdf.js's tight glyph-metrics measurement, but the browser's own
+                        // line-height for the same font-size can run a couple pixels taller,
+                        // which was enough to trigger the textarea's native vertical
+                        // scrollbar even though nothing meaningful was actually clipped.
+                        className="h-full w-full resize-none overflow-hidden whitespace-pre border border-dashed border-transparent bg-transparent leading-none outline-none hover:border-base-content/20"
                         style={{
                           color: el.color,
                           fontSize: el.fontSizePt * scale,
@@ -1783,8 +2081,36 @@ export function PdfEditorWorkspace() {
                             pushHistory();
                             setSelectedElementId(el.id);
                           }}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          className="w-full resize-none border border-dashed border-transparent bg-transparent leading-tight outline-none hover:border-base-content/20 focus:border-primary/50"
+                          onMouseDown={(event) => {
+                            // A plain click should still land the caret for typing, but
+                            // pressing and dragging (anywhere on the box, not just its
+                            // edge) should move it — matching how Canva/Slides-style
+                            // editors treat text boxes. Distinguish the two with a small
+                            // movement threshold before handing off to the drag logic.
+                            event.stopPropagation();
+                            const textarea = event.currentTarget;
+                            const startX = event.clientX;
+                            const startY = event.clientY;
+                            let dragging = false;
+
+                            function onMove(moveEvent: MouseEvent) {
+                              if (dragging) return;
+                              if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 4) {
+                                dragging = true;
+                                window.removeEventListener("mousemove", onMove);
+                                window.removeEventListener("mouseup", onUp);
+                                textarea.blur();
+                                startElementDrag(el, event);
+                              }
+                            }
+                            function onUp() {
+                              window.removeEventListener("mousemove", onMove);
+                              window.removeEventListener("mouseup", onUp);
+                            }
+                            window.addEventListener("mousemove", onMove);
+                            window.addEventListener("mouseup", onUp);
+                          }}
+                          className="w-full cursor-move resize-none border border-dashed border-transparent bg-transparent leading-tight outline-none hover:border-base-content/20 focus:cursor-text"
                           style={{
                             color: el.color,
                             fontSize: el.fontSizePt * scale,
@@ -1802,11 +2128,27 @@ export function PdfEditorWorkspace() {
                       )}
 
                       {el.type === "rect" && (
-                        <div className="h-full w-full border-2" style={{ borderColor: el.color }} />
+                        <div
+                          className="h-full w-full"
+                          style={{
+                            borderStyle: el.strokeWidthPt > 0 ? "solid" : "none",
+                            borderWidth: el.strokeWidthPt * scale,
+                            borderColor: el.color,
+                            backgroundColor: el.fillColorHex ?? "transparent",
+                          }}
+                        />
                       )}
 
                       {el.type === "ellipse" && (
-                        <div className="h-full w-full rounded-full border-2" style={{ borderColor: el.color }} />
+                        <div
+                          className="h-full w-full rounded-full"
+                          style={{
+                            borderStyle: el.strokeWidthPt > 0 ? "solid" : "none",
+                            borderWidth: el.strokeWidthPt * scale,
+                            borderColor: el.color,
+                            backgroundColor: el.fillColorHex ?? "transparent",
+                          }}
+                        />
                       )}
 
                       {el.type === "highlight" && (
@@ -1920,142 +2262,50 @@ export function PdfEditorWorkspace() {
                         </div>
                       )}
 
-                      <div
-                        onMouseDown={(event) => startElementResize(el, event)}
-                        title={el.type === "text" ? "Drag to resize text" : "Drag to resize"}
-                        className="absolute -bottom-1.5 -right-1.5 z-10 hidden h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-primary group-hover:block"
-                      />
+                      {el.type === "text" ? (
+                        <div
+                          onMouseDown={(event) => startElementResize(el, event)}
+                          title="Drag to resize text"
+                          className="absolute -bottom-1.5 -right-1.5 z-10 hidden h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-primary group-hover:block"
+                        />
+                      ) : (
+                        RESIZE_HANDLES.map((h) => (
+                          <div
+                            key={h.dir}
+                            onMouseDown={(event) => startElementResize(el, event, h.dir)}
+                            title="Drag to resize"
+                            className={`absolute z-10 hidden h-3 w-3 rounded-sm border border-white bg-primary group-hover:block ${h.position} ${h.cursor}`}
+                          />
+                        ))
+                      )}
                     </div>
                   ))}
 
               {selectedTextElement && (
-                <div
-                  onMouseDown={(event) => event.stopPropagation()}
-                  className="absolute z-20 flex items-center gap-0.5 rounded-lg border border-primary/30 bg-base-100 p-1 shadow-lg"
-                  style={{
-                    left: selectedTextElement.xPt * scale,
-                    top: Math.max(0, selectedTextTopPt * scale - 44),
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => updateElement(selectedTextElement.id, { isBold: !selectedTextElement.isBold })}
-                    className={`btn btn-xs btn-square ${selectedTextElement.isBold ? "btn-primary" : "btn-ghost"}`}
-                    aria-label="Bold"
-                    title="Bold"
-                  >
-                    <ToolIcon name="bold" className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateElement(selectedTextElement.id, { isItalic: !selectedTextElement.isItalic })}
-                    className={`btn btn-xs btn-square ${selectedTextElement.isItalic ? "btn-primary" : "btn-ghost"}`}
-                    aria-label="Italic"
-                    title="Italic"
-                  >
-                    <ToolIcon name="italic" className="h-3.5 w-3.5" />
-                  </button>
+                <TextEditToolbar
+                  // Keyed by element id so switching the selected text remounts this
+                  // toolbar (and its own open-menu state) from scratch instead of
+                  // carrying anything over from the previous selection.
+                  key={selectedTextElement.id}
+                  element={selectedTextElement}
+                  topPt={selectedTextTopPt}
+                  heightPt={selectedTextHeightPt}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedTextElement.id, patch)}
+                  onDuplicate={selectedTextElement.type === "text" ? () => duplicateTextElement(selectedTextElement) : undefined}
+                  onDelete={() => removeElement(selectedTextElement.id)}
+                />
+              )}
 
-                  <span className="mx-0.5 h-4 w-px bg-base-300" />
-
-                  <input
-                    type="number"
-                    min={6}
-                    max={200}
-                    value={Math.round(selectedTextElement.fontSizePt)}
-                    onChange={(event) =>
-                      updateElement(selectedTextElement.id, { fontSizePt: Number(event.target.value) || selectedTextElement.fontSizePt })
-                    }
-                    className="input input-bordered input-xs w-12"
-                    aria-label="Font size"
-                    title="Font size"
-                  />
-
-                  <div className="dropdown">
-                    <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1" title="Font family">
-                      <ToolIcon name="font-family" className="h-3.5 w-3.5" />
-                      <ToolIcon name="chevron-down" className="h-3 w-3" />
-                    </div>
-                    <ul tabIndex={0} className="dropdown-content menu z-30 w-36 rounded-box bg-base-100 p-2 shadow-lg">
-                      {(["sans-serif", "serif", "monospace"] as const).map((family) => (
-                        <li key={family}>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              updateElement(selectedTextElement.id, { fontFamily: family });
-                              event.currentTarget.blur();
-                            }}
-                            className={selectedTextElement.fontFamily === family ? "active" : ""}
-                          >
-                            {family === "sans-serif" ? "Sans-serif" : family === "serif" ? "Serif" : "Monospace"}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <span className="mx-0.5 h-4 w-px bg-base-300" />
-
-                  <div className="dropdown">
-                    <div
-                      tabIndex={0}
-                      role="button"
-                      className="btn btn-ghost btn-xs btn-square"
-                      title="Text color"
-                      style={{ color: selectedTextElement.color }}
-                    >
-                      <ToolIcon name="palette" className="h-3.5 w-3.5" />
-                    </div>
-                    <div tabIndex={0} className="dropdown-content z-30 flex gap-1.5 rounded-box bg-base-100 p-2 shadow-lg">
-                      {colorSwatches.map((swatch) => (
-                        <button
-                          key={swatch.id}
-                          type="button"
-                          onClick={() => updateElement(selectedTextElement.id, { color: resolveSwatchHex(swatch.id) })}
-                          aria-label={`Use ${swatch.id} color`}
-                          className={`h-5 w-5 rounded-full ${swatch.className}`}
-                        />
-                      ))}
-                      <label className="relative flex h-5 w-5 items-center justify-center rounded-full border border-base-300">
-                        <div
-                          className="absolute inset-0 rounded-full"
-                          style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
-                        />
-                        <input
-                          type="color"
-                          value={selectedTextElement.color}
-                          onChange={(event) => updateElement(selectedTextElement.id, { color: event.target.value })}
-                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  {selectedTextElement.type === "text" && (
-                    <>
-                      <span className="mx-0.5 h-4 w-px bg-base-300" />
-                      <button
-                        type="button"
-                        onClick={() => duplicateTextElement(selectedTextElement)}
-                        className="btn btn-ghost btn-xs btn-square"
-                        aria-label="Duplicate"
-                        title="Duplicate"
-                      >
-                        <ToolIcon name="duplicate" className="h-3.5 w-3.5" />
-                      </button>
-                    </>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => removeElement(selectedTextElement.id)}
-                    className="btn btn-ghost btn-xs btn-square text-error"
-                    aria-label="Delete"
-                    title="Delete"
-                  >
-                    <ToolIcon name="trash" className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+              {selectedShapeElement && (
+                <ShapeEditToolbar
+                  key={selectedShapeElement.id}
+                  element={selectedShapeElement}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedShapeElement.id, patch)}
+                  onDuplicate={() => duplicateShapeElement(selectedShapeElement)}
+                  onDelete={() => removeElement(selectedShapeElement.id)}
+                />
               )}
               </div>
 

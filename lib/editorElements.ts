@@ -19,7 +19,21 @@ export type EditorElement =
   | {
       id: string;
       pageIndex: number;
-      type: "rect" | "highlight" | "ellipse";
+      type: "rect" | "ellipse";
+      xPt: number;
+      yPt: number;
+      widthPt: number;
+      heightPt: number;
+      /** Border/stroke color. */
+      color: string;
+      strokeWidthPt: number;
+      /** null = no fill (outline only), matching the original behavior. */
+      fillColorHex: string | null;
+    }
+  | {
+      id: string;
+      pageIndex: number;
+      type: "highlight";
       xPt: number;
       yPt: number;
       widthPt: number;
@@ -157,13 +171,10 @@ export type EditorElement =
        *  text use a closer-matching standard font instead of always Helvetica.
        *  User-editable afterwards via the floating text toolbar. */
       fontFamily: FontFamily;
-      /** Guessed from comparing the PDF's actual rendered glyph width against a
-       *  regular- vs. bold-weight canvas measurement (pdf.js doesn't expose the
-       *  real font weight) — picks the Bold standard-font variant when true.
+      /** Read from the PDF's actual loaded Font object (pdfjs `commonObjs`), which
+       *  reports real .bold/.italic flags from the font itself — not a guess.
        *  User-editable afterwards via the floating text toolbar. */
       isBold: boolean;
-      /** Italic can't be reliably guessed from glyph width the way bold can (slant
-       *  doesn't change width) — always starts false, user-toggleable only. */
       isItalic: boolean;
     };
 
@@ -177,8 +188,14 @@ export type DetectedTextItem = {
   fontSizePt: number;
   str: string;
   bgColorHex: string;
+  /** The text's own sampled ink color, distinct from bgColorHex — null if no
+   *  color clearly different from the background could be found in the box.
+   *  Preferred over a computed black/white default so faded or colored
+   *  original text keeps looking the same after being replaced. */
+  inkColorHex: string | null;
   fontFamily: FontFamily;
   isBold: boolean;
+  isItalic: boolean;
 };
 
 export function createElementId(): string {

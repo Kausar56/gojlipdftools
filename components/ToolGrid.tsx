@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ToolIcon } from "./icons";
 import { ToolCard } from "./ToolCard";
+import { Reveal } from "./Reveal";
 import type { Tool } from "@/lib/tools";
 
 export function ToolGrid({ tools }: { tools: Tool[] }) {
@@ -32,8 +33,10 @@ export function ToolGrid({ tools }: { tools: Tool[] }) {
 
       {filtered.length > 0 ? (
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {filtered.map((tool) => (
-            <ToolCard key={tool.slug} tool={tool} />
+          {filtered.map((tool, index) => (
+            <Reveal key={tool.slug} delayMs={Math.min(index, 7) * 60}>
+              <ToolCard tool={tool} />
+            </Reveal>
           ))}
         </div>
       ) : (

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DecorativePanel } from "./DecorativePanel";
-import { TrustBadges } from "./TrustBadges";
+import { ToolIcon } from "./icons";
 
 export function Hero() {
   return (
@@ -15,26 +15,57 @@ export function Hero() {
         }}
       />
 
+      {/* Soft animated glow behind the decorative panel — pure CSS, no JS needed
+          since it's a fixed idle motion, not something reacting to scroll. */}
+      <div
+        className="animate-blob pointer-events-none absolute top-1/2 right-0 -z-10 h-80 w-80 -translate-y-1/2 rounded-full bg-linear-to-br from-primary/25 via-secondary/20 to-accent/25 opacity-60 blur-3xl sm:h-[26rem] sm:w-[26rem]"
+        aria-hidden="true"
+      />
+
       <div className="relative mx-auto grid max-w-6xl gap-12 px-4 py-14 sm:px-8 lg:grid-cols-2 lg:items-center lg:py-20">
         <div className="text-center lg:text-left">
-          <h1 className="text-4xl font-bold tracking-tight text-base-content sm:text-5xl">
-            The Best Way to <span className="text-primary">Manage</span> Your PDFs
+          <span
+            className="animate-fade-in-up inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
+            style={{ animationDelay: "0ms" }}
+          >
+            <ToolIcon name="shield" className="h-3.5 w-3.5" />
+            100% browser-based — files never leave your device
+          </span>
+          <h1
+            className="animate-fade-in-up font-display mt-4 text-4xl font-bold tracking-tight text-base-content sm:text-5xl lg:text-6xl"
+            style={{ animationDelay: "80ms" }}
+          >
+            The Best Way to{" "}
+            <span className="bg-linear-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+              Manage
+            </span>{" "}
+            Your PDFs
           </h1>
-          <p className="mx-auto mt-4 max-w-lg text-base text-base-content/70 sm:text-lg lg:mx-0">
+          <p
+            className="animate-fade-in-up mx-auto mt-4 max-w-lg text-base text-base-content/70 sm:text-lg lg:mx-0"
+            style={{ animationDelay: "180ms" }}
+          >
             Gojli is a free, browser-based toolkit for everyday document work. Merge, split,
             compress, and convert PDFs with precision — nothing to install.
           </p>
-          <div className="mt-7 flex flex-col items-center gap-3 sm:flex-row lg:justify-start">
-            <Link href="/#tools" className="btn btn-primary">
+          <div
+            className="animate-fade-in-up mt-7 flex flex-col items-center gap-3 sm:flex-row lg:justify-start"
+            style={{ animationDelay: "280ms" }}
+          >
+            <Link
+              href="/#tools"
+              className="btn btn-primary transition-transform duration-300 hover:scale-105 hover:shadow-lg hover:shadow-primary/30"
+            >
               Explore All Tools
             </Link>
-            <Link href="/about" className="btn btn-outline">
+            <Link href="/about" className="btn btn-outline transition-transform duration-300 hover:scale-105">
               Learn More
             </Link>
           </div>
-          <TrustBadges className="mt-8 justify-center lg:justify-start" />
         </div>
 
+        {/* DecorativePanel runs its own GSAP entrance/float/tilt — no CSS
+            fade-in wrapper needed here, that would just double up on it. */}
         <DecorativePanel />
       </div>
 
