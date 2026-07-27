@@ -1,49 +1,71 @@
-"use client";
-
-import { useMemo, useState } from "react";
-import { ToolIcon } from "./icons";
 import { ToolCard } from "./ToolCard";
+import { ToolIcon } from "./icons";
 import { Reveal } from "./Reveal";
+import { megaMenu } from "@/lib/megaMenu";
 import type { Tool } from "@/lib/tools";
 
-export function ToolGrid({ tools }: { tools: Tool[] }) {
-  const [query, setQuery] = useState("");
+const MOST_POPULAR_SLUGS = [
+  "merge-pdf",
+  "split-pdf",
+  "compress-pdf",
+  "edit-pdf",
+  "pdf-to-word",
+  "word-to-pdf",
+  "jpg-to-pdf",
+  "protect-pdf",
+];
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return tools;
-    return tools.filter(
-      (tool) =>
-        tool.name.toLowerCase().includes(q) || tool.shortDescription.toLowerCase().includes(q),
-    );
-  }, [tools, query]);
+function DisabledToolCard({ label }: { label: string }) {
+  return (
+    <div
+      aria-disabled="true"
+      title="Coming soon"
+      className="glass card cursor-not-allowed p-5 opacity-50 outline-1 outline-base-content/10"
+    >
+      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-base-content/10 text-base-content/50">
+        <ToolIcon name="file" className="h-5 w-5" />
+      </span>
+      <h3 className="mt-3 text-base font-semibold text-base-content/60">{label}</h3>
+      <p className="mt-1 text-sm text-base-content/40">Coming soon.</p>
+    </div>
+  );
+}
+
+export function ToolGrid({ tools }: { tools: Tool[] }) {
+  const bySlug = new Map(tools.map((tool) => [tool.slug, tool]));
+  const mostPopular = MOST_POPULAR_SLUGS.map((slug) => bySlug.get(slug)).filter(
+    (tool): tool is Tool => Boolean(tool),
+  );
 
   return (
-    <div>
-      <label className="input input-bordered mx-auto flex w-full max-w-md items-center gap-2">
-        <ToolIcon name="search" className="h-4 w-4 text-base-content/50" />
-        <input
-          type="text"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search a tool, e.g. merge, compress..."
-          className="grow"
-        />
-      </label>
-
-      {filtered.length > 0 ? (
-        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {filtered.map((tool, index) => (
+    <div className="space-y-12">
+      <div>
+        <h3 className="mb-4 text-lg font-semibold text-base-content">Most Popular</h3>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {mostPopular.map((tool, index) => (
             <Reveal key={tool.slug} delayMs={Math.min(index, 7) * 60}>
               <ToolCard tool={tool} />
             </Reveal>
           ))}
         </div>
-      ) : (
-        <p className="mt-10 text-center text-sm text-base-content/60">
-          No tools match &ldquo;{query}&rdquo; yet.
-        </p>
-      )}
+      </div>
+
+      {megaMenu.map((category, categoryIndex) => (
+        <Reveal key={category.title} delayMs={Math.min(categoryIndex, 6) * 60}>
+          <h3 className="mb-4 text-lg font-semibold text-base-content">{category.title}</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {category.items.map((item) => {
+              const tool = item.slug ? bySlug.get(item.slug) : undefined;
+              return tool ? (
+                <ToolCard key={item.label} tool={tool} />
+              ) : (
+                <DisabledToolCard key={item.label} label={item.label} />
+              );
+            })}
+          </div>
+        </Reveal>
+      ))}
     </div>
   );
 }
+

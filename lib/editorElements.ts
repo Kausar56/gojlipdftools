@@ -159,6 +159,15 @@ export type EditorElement =
        *  typing a longer replacement but still shrink back down (not ratchet up
        *  permanently) once the text is short again. */
       originalWidthPt: number;
+      /** The text this element replaced. Kept so the background mask only grows
+       *  beyond originalWidthPt by however much the *replacement* text is wider
+       *  than the *original* — both measured in whatever font is being used at
+       *  the time — instead of comparing the replacement against originalWidthPt
+       *  directly, which mixes widths from two different fonts (the original's
+       *  real, possibly-embedded font vs. the standard font used to redraw it)
+       *  and made the mask overflow past the true original background region
+       *  whenever the standard substitute simply rendered the same text wider. */
+      originalText: string;
       heightPt: number;
       baselinePt: number;
       fontSizePt: number;

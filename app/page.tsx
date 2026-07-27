@@ -2,7 +2,6 @@ import { Hero } from "@/components/Hero";
 import { WorkflowSteps } from "@/components/WorkflowSteps";
 import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { ToolGrid } from "@/components/ToolGrid";
-import { Reveal } from "@/components/Reveal";
 import { tools } from "@/lib/tools";
 
 export default function Home() {
@@ -11,26 +10,43 @@ export default function Home() {
       <Hero />
 
       <section id="tools" className="relative overflow-hidden bg-base-200 pt-16 pb-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-8">
-          <Reveal className="text-center">
-            <h2 className="text-2xl font-semibold text-base-content sm:text-3xl">Every Tool You Need</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-base text-base-content/70">
-              Gojli offers a complete toolkit to handle any document task in seconds, directly in your
-              browser.
-            </p>
-          </Reveal>
-          <div className="mt-10">
-            <ToolGrid tools={tools} />
-          </div>
+        {/* The glass cards in ToolGrid need something visually rich behind them
+            to actually read as "frosted glass" — against a flat bg-base-200
+            (especially in light mode, where base-100/base-200 are both close
+            to white) the blur effect had nothing to blur and the cards looked
+            washed out. These soft, blurred color blobs give it that backdrop. */}
+        <div
+          className="pointer-events-none absolute -top-10 -left-20 -z-0 h-72 w-72 rounded-full bg-primary/20 opacity-60 blur-3xl"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute top-1/3 -right-24 -z-0 h-80 w-80 rounded-full bg-secondary/20 opacity-50 blur-3xl"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute bottom-0 left-1/3 -z-0 h-64 w-64 rounded-full bg-accent/15 opacity-50 blur-3xl"
+          aria-hidden="true"
+        />
+
+        <div className="relative mx-auto max-w-6xl px-4 sm:px-8">
+          <ToolGrid tools={tools} />
         </div>
 
         <svg
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full text-base-100 sm:h-16"
-          viewBox="0 0 1440 100"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full text-base-100 sm:h-24"
+          viewBox="0 0 1440 120"
           preserveAspectRatio="none"
           aria-hidden="true"
         >
-          <path d="M0,40 C360,100 1080,0 1440,60 L1440,100 L0,100 Z" fill="currentColor" />
+          <path
+            d="M0,70 C160,30 320,100 480,70 C640,40 800,100 960,70 C1120,40 1280,100 1440,70 L1440,120 L0,120 Z"
+            fill="currentColor"
+            opacity="0.45"
+          />
+          <path
+            d="M0,90 C120,60 240,110 360,90 C480,70 600,110 720,90 C840,70 960,110 1080,90 C1200,70 1320,105 1440,85 L1440,120 L0,120 Z"
+            fill="currentColor"
+          />
         </svg>
       </section>
 

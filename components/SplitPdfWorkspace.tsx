@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
+import { UploadSourceMenu } from "./UploadSourceMenu";
 import { parsePageGroups } from "@/lib/pageRanges";
 
 type ResultItem = {
@@ -123,9 +124,16 @@ export function SplitPdfWorkspace() {
           <ToolIcon name="upload" className="h-6 w-6" />
         </span>
         <p className="text-sm text-base-content/70">Drag & drop a PDF here, or</p>
-        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-md">
-          Choose File
-        </button>
+        <div className="flex">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="btn btn-primary btn-md rounded-r-none"
+          >
+            Choose File
+          </button>
+          <UploadSourceMenu onFile={loadFile} />
+        </div>
         <input
           ref={inputRef}
           type="file"

@@ -12,6 +12,7 @@ import { MegaMenu } from "./MegaMenu";
 import { tools } from "@/lib/tools";
 
 const navLinks = [
+  { href: "/edit-pdf", label: "Edit" },
   { href: "/compress-pdf", label: "Compress" },
   { href: "/merge-pdf", label: "Merge" },
   { href: "/split-pdf", label: "Split" },

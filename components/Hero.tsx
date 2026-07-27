@@ -58,8 +58,8 @@ export function Hero() {
             >
               Explore All Tools
             </Link>
-            <Link href="/about" className="btn btn-outline transition-transform duration-300 hover:scale-105">
-              Learn More
+            <Link href="/edit-pdf" className="btn btn-outline transition-transform duration-300 hover:scale-105">
+              Edit PDF
             </Link>
           </div>
         </div>
@@ -69,13 +69,26 @@ export function Hero() {
         <DecorativePanel />
       </div>
 
+      {/* Two layered waves instead of one — a single smooth curve barely read
+          against the section below at this height. The back layer (lower
+          opacity, bigger/slower undulation) sits behind the front layer
+          (denser, more oscillations, full opacity) so the transition has
+          actual depth instead of looking like a flat, barely-there line. */}
       <svg
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full text-base-200 sm:h-20"
-        viewBox="0 0 1440 100"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-16 w-full text-base-200 sm:h-24"
+        viewBox="0 0 1440 120"
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <path d="M0,40 C360,100 1080,0 1440,60 L1440,100 L0,100 Z" fill="currentColor" />
+        <path
+          d="M0,70 C160,30 320,100 480,70 C640,40 800,100 960,70 C1120,40 1280,100 1440,70 L1440,120 L0,120 Z"
+          fill="currentColor"
+          opacity="0.45"
+        />
+        <path
+          d="M0,90 C120,60 240,110 360,90 C480,70 600,110 720,90 C840,70 960,110 1080,90 C1200,70 1320,105 1440,85 L1440,120 L0,120 Z"
+          fill="currentColor"
+        />
       </svg>
     </section>
   );

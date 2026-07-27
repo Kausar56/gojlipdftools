@@ -6,36 +6,35 @@ import type { EditorElement } from "@/lib/editorElements";
 import { ToolIcon } from "./icons";
 import { NativeColorInput } from "./NativeColorInput";
 
-type ShapeElement = Extract<EditorElement, { type: "rect" | "ellipse" }>;
+type LineElement = Extract<EditorElement, { type: "line" }>;
 
-export function ShapeEditToolbar({
+export function LineEditToolbar({
   element,
   scale,
   onUpdate,
   onDuplicate,
   onDelete,
 }: {
-  element: ShapeElement;
+  element: LineElement;
   scale: number;
-  onUpdate: (patch: Partial<ShapeElement>) => void;
+  onUpdate: (patch: Partial<LineElement>) => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  // Same reasoning as TextEditToolbar: explicit click-driven open state instead
-  // of daisyUI's CSS :focus-within dropdown, which was too easy to trigger
-  // unintentionally (see the text toolbar's color-picker fix) for a toolbar
-  // that floats directly above content the user is still interacting with.
-  const [openMenu, setOpenMenu] = useState<"fill" | "border" | null>(null);
+  const [openMenu, setOpenMenu] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!openMenu) return;
     const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpenMenu(null);
+      if (!rootRef.current?.contains(event.target as Node)) setOpenMenu(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [openMenu]);
+
+  const leftPt = Math.min(element.x1Pt, element.x2Pt);
+  const topPt = Math.min(element.y1Pt, element.y2Pt);
 
   return (
     <div
@@ -43,17 +42,17 @@ export function ShapeEditToolbar({
       onMouseDown={(event) => event.stopPropagation()}
       className="absolute z-20 flex items-center gap-0.5 rounded-lg border border-primary/30 bg-base-100 p-1 shadow-lg"
       style={{
-        left: element.xPt * scale,
-        top: Math.max(0, element.yPt * scale - 44),
+        left: leftPt * scale,
+        top: Math.max(0, topPt * scale - 44),
       }}
     >
-      <div className="flex items-center gap-0.5" title="Border width">
+      <div className="flex items-center gap-0.5" title="Line thickness">
         <button
           type="button"
-          onClick={() => onUpdate({ strokeWidthPt: Math.max(0, Math.round(element.strokeWidthPt) - 1) })}
+          onClick={() => onUpdate({ strokeWidthPt: Math.max(1, Math.round(element.strokeWidthPt) - 1) })}
           className="btn btn-ghost btn-xs btn-square"
-          aria-label="Decrease border width"
-          title="Decrease border width"
+          aria-label="Decrease thickness"
+          title="Decrease thickness"
         >
           <ToolIcon name="minus" className="h-3 w-3" />
         </button>
@@ -64,8 +63,8 @@ export function ShapeEditToolbar({
           type="button"
           onClick={() => onUpdate({ strokeWidthPt: Math.min(20, Math.round(element.strokeWidthPt) + 1) })}
           className="btn btn-ghost btn-xs btn-square"
-          aria-label="Increase border width"
-          title="Increase border width"
+          aria-label="Increase thickness"
+          title="Increase thickness"
         >
           <ToolIcon name="plus" className="h-3 w-3" />
         </button>
@@ -76,64 +75,14 @@ export function ShapeEditToolbar({
       <div className="relative">
         <button
           type="button"
-          onClick={() => setOpenMenu((current) => (current === "fill" ? null : "fill"))}
+          onClick={() => setOpenMenu((current) => !current)}
           className="btn btn-ghost btn-xs btn-square"
-          title="Fill color"
-          style={{ color: element.fillColorHex ?? undefined }}
-        >
-          <ToolIcon name="shape-rect" className="h-3.5 w-3.5" />
-        </button>
-        {openMenu === "fill" && (
-          <div className="absolute top-full left-0 z-30 mt-1 flex gap-2 rounded-box bg-base-100 p-2 shadow-lg">
-            <button
-              type="button"
-              onClick={() => {
-                onUpdate({ fillColorHex: null });
-                setOpenMenu(null);
-              }}
-              aria-label="No fill"
-              title="No fill"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-base-300 bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,var(--color-error)_2px,var(--color-error)_3px)]"
-            />
-            {colorSwatches.map((swatch) => (
-              <button
-                key={swatch.id}
-                type="button"
-                onClick={() => {
-                  onUpdate({ fillColorHex: resolveSwatchHex(swatch.id) });
-                  setOpenMenu(null);
-                }}
-                aria-label={`Fill with ${swatch.id}`}
-                title={`${swatch.id} (${resolveSwatchHex(swatch.id)})`}
-                className={`h-7 w-7 rounded-full ${swatch.className}`}
-              />
-            ))}
-            <label className="relative flex h-7 w-7 items-center justify-center rounded-full border border-base-300">
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
-              />
-              <NativeColorInput
-                value={element.fillColorHex ?? "#ffffff"}
-                onChange={(color) => onUpdate({ fillColorHex: color })}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              />
-            </label>
-          </div>
-        )}
-      </div>
-
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpenMenu((current) => (current === "border" ? null : "border"))}
-          className="btn btn-ghost btn-xs btn-square"
-          title="Border color"
+          title="Line color"
           style={{ color: element.color }}
         >
           <ToolIcon name="palette" className="h-3.5 w-3.5" />
         </button>
-        {openMenu === "border" && (
+        {openMenu && (
           <div className="absolute top-full left-0 z-30 mt-1 flex gap-2 rounded-box bg-base-100 p-2 shadow-lg">
             {colorSwatches.map((swatch) => (
               <button
@@ -141,9 +90,9 @@ export function ShapeEditToolbar({
                 type="button"
                 onClick={() => {
                   onUpdate({ color: resolveSwatchHex(swatch.id) });
-                  setOpenMenu(null);
+                  setOpenMenu(false);
                 }}
-                aria-label={`Use ${swatch.id} border`}
+                aria-label={`Use ${swatch.id} color`}
                 title={`${swatch.id} (${resolveSwatchHex(swatch.id)})`}
                 className={`h-7 w-7 rounded-full ${swatch.className}`}
               />

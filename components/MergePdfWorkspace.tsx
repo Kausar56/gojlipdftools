@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
+import { UploadSourceMenu } from "./UploadSourceMenu";
 
 type FileItem = {
   id: string;
@@ -30,7 +31,7 @@ export function MergePdfWorkspace() {
     setErrorMessage("");
   }
 
-  function addFiles(fileList: FileList | null) {
+  function addFiles(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0) return;
     const next = Array.from(fileList).map((file) => ({
       id: `${file.name}-${file.size}-${Math.random().toString(36).slice(2)}`,
@@ -100,9 +101,16 @@ export function MergePdfWorkspace() {
           <ToolIcon name="upload" className="h-6 w-6" />
         </span>
         <p className="text-sm text-base-content/70">Drag & drop PDF files here, or</p>
-        <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-primary btn-md">
-          Choose Files
-        </button>
+        <div className="flex">
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="btn btn-primary btn-md rounded-r-none"
+          >
+            Choose Files
+          </button>
+          <UploadSourceMenu onFile={(file) => addFiles([file])} />
+        </div>
         <input
           ref={inputRef}
           type="file"
@@ -157,25 +165,29 @@ export function MergePdfWorkspace() {
         <p className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>
       )}
 
-      <div className="mt-5 flex flex-wrap items-center gap-3">
-        {status === "done" && downloadUrl ? (
-          <a href={downloadUrl} download="merged.pdf" className="btn btn-primary flex-1">
-            <ToolIcon name="download" className="h-4 w-4" />
-            Download Merged PDF
-          </a>
-        ) : (
-          <button
-            type="button"
-            onClick={handleMerge}
-            disabled={items.length < 2 || status === "merging"}
-            className="btn btn-primary flex-1"
-          >
-            {status === "merging" ? "Merging..." : "Merge PDF"}
-          </button>
-        )}
-      </div>
-      {items.length === 1 && (
-        <p className="mt-2 text-xs text-base-content/50">Add at least one more PDF to merge.</p>
+      {items.length > 0 && (
+        <>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            {status === "done" && downloadUrl ? (
+              <a href={downloadUrl} download="merged.pdf" className="btn btn-primary flex-1">
+                <ToolIcon name="download" className="h-4 w-4" />
+                Download Merged PDF
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={handleMerge}
+                disabled={items.length < 2 || status === "merging"}
+                className="btn btn-primary flex-1"
+              >
+                {status === "merging" ? "Merging..." : "Merge PDF"}
+              </button>
+            )}
+          </div>
+          {items.length === 1 && (
+            <p className="mt-2 text-xs text-base-content/50">Add at least one more PDF to merge.</p>
+          )}
+        </>
       )}
     </div>
   );

@@ -1,5 +1,16 @@
 @import "tailwindcss";
-@plugin "daisyui";
+/* themes: false — without this, daisyUI generates its OWN default "light"/
+   "dark" themes (secondary=pink, accent=teal, neutral=near-black) in ADDITION
+   to the custom "light"/"dark" themes defined below with our actual brand
+   colors. Both target the same [data-theme="light"/"dark"] selector, and
+   daisyUI's own version wins the specificity fight (its selector wraps
+   [data-theme=...] inside :is(...) alongside a :has(...) branch, and :is()'s
+   specificity is the max across all its branches, not just whichever one
+   actually matched) — so every "primary"/"secondary"/"accent"/"neutral" swatch
+   or utility class silently rendered daisyUI's stock palette instead of ours. */
+@plugin "daisyui" {
+  themes: false;
+}
 
 /* Light theme (default) — generated from the brand palette: Primary #2663BB, Secondary #10B981, Tertiary #EF4444, Neutral slate */
 @plugin "daisyui/theme" {

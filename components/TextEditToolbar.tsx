@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { colorSwatches, resolveSwatchHex } from "@/lib/colorSwatches";
 import type { EditorElement, FontFamily } from "@/lib/editorElements";
 import { ToolIcon } from "./icons";
+import { NativeColorInput } from "./NativeColorInput";
 
 type TextLikeElement = Extract<EditorElement, { type: "text" } | { type: "text-edit" }>;
 
@@ -156,7 +157,7 @@ export function TextEditToolbar({
           <ToolIcon name="palette" className="h-3.5 w-3.5" />
         </button>
         {openMenu === "color" && (
-          <div className="absolute top-full left-0 z-30 mt-1 flex gap-1.5 rounded-box bg-base-100 p-2 shadow-lg">
+          <div className="absolute top-full left-0 z-30 mt-1 flex gap-2 rounded-box bg-base-100 p-2 shadow-lg">
             {colorSwatches.map((swatch) => (
               <button
                 key={swatch.id}
@@ -166,18 +167,18 @@ export function TextEditToolbar({
                   setOpenMenu(null);
                 }}
                 aria-label={`Use ${swatch.id} color`}
-                className={`h-5 w-5 rounded-full ${swatch.className}`}
+                title={`${swatch.id} (${resolveSwatchHex(swatch.id)})`}
+                className={`h-7 w-7 rounded-full ${swatch.className}`}
               />
             ))}
-            <label className="relative flex h-5 w-5 items-center justify-center rounded-full border border-base-300">
+            <label className="relative flex h-7 w-7 items-center justify-center rounded-full border border-base-300">
               <div
                 className="absolute inset-0 rounded-full"
                 style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
               />
-              <input
-                type="color"
+              <NativeColorInput
                 value={element.color}
-                onChange={(event) => onUpdate({ color: event.target.value })}
+                onChange={(color) => onUpdate({ color })}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
             </label>

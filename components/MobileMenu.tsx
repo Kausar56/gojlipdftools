@@ -9,6 +9,7 @@ import { ToolIcon } from "./icons";
 
 const navLinks = [
   { href: "/#tools", label: "All Tools" },
+  { href: "/edit-pdf", label: "Edit" },
   { href: "/compress-pdf", label: "Compress" },
   { href: "/merge-pdf", label: "Merge" },
   { href: "/split-pdf", label: "Split" },
@@ -63,9 +64,14 @@ export function MobileMenu() {
         <ToolIcon name={open ? "close" : "menu"} className="h-5 w-5" />
       </button>
 
+      {/* pointer-events instead of visible/invisible — Tailwind's default
+          `transition` property list doesn't include `visibility`, so toggling
+          it snapped the menu hidden instantly at the start of the close
+          transition instead of after the opacity/transform fade played out,
+          making the close feel instant even though it was "animated". */}
       <div
         className={`absolute inset-x-0 top-full z-30 origin-top border-b border-base-300 bg-base-100 px-4 py-4 shadow-lg transition duration-200 ease-out sm:px-8 ${
-          open ? "visible translate-y-0 scale-100 opacity-100" : "invisible -translate-y-2 scale-95 opacity-0"
+          open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-2 scale-95 opacity-0"
         }`}
       >
         <ul className="flex flex-col gap-1 text-sm font-medium text-base-content/80">

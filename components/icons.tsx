@@ -3,6 +3,13 @@ type IconProps = {
 };
 
 const paths: Record<string, React.ReactNode> = {
+  cloud: <path d="M6.5 19a4.5 4.5 0 0 1-.4-8.98A6 6 0 0 1 18 12a4 4 0 0 1 0 8H6.5z" />,
+  file: (
+    <>
+      <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <path d="M14 3v6h6" />
+    </>
+  ),
   merge: (
     <>
       <path d="M8 3v6a2 2 0 0 0 2 2h4" />

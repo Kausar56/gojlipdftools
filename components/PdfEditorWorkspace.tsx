@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { TextEditToolbar } from "./TextEditToolbar";
 import { ShapeEditToolbar } from "./ShapeEditToolbar";
+import { LineEditToolbar } from "./LineEditToolbar";
 import { SignaturePad } from "./SignaturePad";
 import { FindReplacePanel } from "./FindReplacePanel";
 import { ToolbarDropdown } from "./ToolbarDropdown";
+import { NativeColorInput } from "./NativeColorInput";
+import { UploadSourceMenu } from "./UploadSourceMenu";
 import { colorSwatches, hexToRgbFloat, resolveSwatchHex } from "@/lib/colorSwatches";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { createElementId, type DetectedTextItem, type EditorElement, type Point } from "@/lib/editorElements";
@@ -85,8 +88,10 @@ const formFieldTypes: { id: "form-text" | "form-multiline" | "form-dropdown" | "
 // "shapes" is intentionally excluded — border/fill color is now set per-shape
 // via the floating ShapeEditToolbar right after it's placed (shapes auto-select
 // on creation), so a default-color picker in the persistent toolbar duplicated
-// that and was one extra, unnecessary step.
-const toolsWithColor = new Set<ToolId>(["text", "draw", "highlight", "stamp-x", "stamp-check", "stamp-dot"]);
+// that and was one extra, unnecessary step. "draw" is excluded for the same
+// reason — pen color/thickness now live in their own popover (see the
+// "Annotate" dropdown), not a plain always-visible swatch row.
+const toolsWithColor = new Set<ToolId>(["text", "highlight", "stamp-x", "stamp-check", "stamp-dot"]);
 const CLICK_TO_ADD: ToolId[] = [
   "text",
   "shapes",
@@ -249,8 +254,13 @@ export function PdfEditorWorkspace() {
   const [replacedKeys, setReplacedKeys] = useState<Set<string>>(new Set());
 
   const [activeTool, setActiveTool] = useState<ToolId>("cursor");
-  const [activeColorHex, setActiveColorHex] = useState<string>(() => resolveSwatchHex(colorSwatches[0].id));
+  // Black, not the brand primary swatch — stamps/ink/shape marks read as a
+  // normal pen/stamp color by default, matching what most PDF tools (and real
+  // ink stamps) default to; still fully overridable via the toolbar's color
+  // swatches for whichever tool is active.
+  const [activeColorHex, setActiveColorHex] = useState<string>("#000000");
   const [activeFontSizePt, setActiveFontSizePt] = useState(16);
+  const [activePenStrokeWidthPt, setActivePenStrokeWidthPt] = useState(2);
   const [shapeType, setShapeType] = useState<ShapeType>("rectangle");
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [drawingPath, setDrawingPath] = useState<Point[] | null>(null);
@@ -495,6 +505,16 @@ export function PdfEditorWorkspace() {
     setSelectedElementId(id);
   }
 
+  function duplicateLineElement(el: Extract<EditorElement, { type: "line" }>) {
+    const id = createElementId();
+    pushHistory();
+    setElements((prev) => [
+      ...prev,
+      { ...el, id, x1Pt: el.x1Pt + 12, y1Pt: el.y1Pt + 12, x2Pt: el.x2Pt + 12, y2Pt: el.y2Pt + 12 },
+    ]);
+    setSelectedElementId(id);
+  }
+
   function buildTextEditElement(item: DetectedTextItem, pageIndex: number, text: string): EditorElement {
     const id = createElementId();
     // item.widthPt is pdf.js's measurement of the original text in its real
@@ -523,6 +543,7 @@ export function PdfEditorWorkspace() {
       // wider than the actual (possibly embedded) PDF font, overflowing onto
       // whatever different-colored content sat just past the real text.
       originalWidthPt: item.widthPt,
+      originalText: item.str,
       heightPt: item.heightPt,
       baselinePt: item.baselinePt,
       fontSizePt: item.fontSizePt,
@@ -787,14 +808,15 @@ export function PdfEditorWorkspace() {
         type: "path",
         points: drawingPath,
         color: activeColorHex,
-        strokeWidthPt: 2,
+        strokeWidthPt: activePenStrokeWidthPt,
       });
     }
     if (activeTool === "shapes" && shapeType === "line" && lineDraft) {
       const { start, current } = lineDraft;
       if (Math.hypot(current.x - start.x, current.y - start.y) > 2) {
+        const id = createElementId();
         addElement({
-          id: createElementId(),
+          id,
           pageIndex: currentPage,
           type: "line",
           x1Pt: start.x,
@@ -804,6 +826,7 @@ export function PdfEditorWorkspace() {
           color: activeColorHex,
           strokeWidthPt: 2,
         });
+        setSelectedElementId(id);
       }
     }
     setDrawingPath(null);
@@ -829,6 +852,33 @@ export function PdfEditorWorkspace() {
       const dxPt = (moveEvent.clientX - startX) / scale;
       const dyPt = (moveEvent.clientY - startY) / scale;
       updateElement(el.id, { xPt: startXPt + dxPt, yPt: startYPt + dyPt });
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function startLineDrag(el: Extract<EditorElement, { type: "line" }>, event: React.MouseEvent) {
+    event.stopPropagation();
+    setSelectedElementId(el.id);
+    if (activeTool === "erase") {
+      removeElement(el.id);
+      return;
+    }
+    if (activeTool !== "cursor") return;
+
+    pushHistory();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const { x1Pt, y1Pt, x2Pt, y2Pt } = el;
+
+    function onMove(moveEvent: MouseEvent) {
+      const dxPt = (moveEvent.clientX - startX) / scale;
+      const dyPt = (moveEvent.clientY - startY) / scale;
+      updateElement(el.id, { x1Pt: x1Pt + dxPt, y1Pt: y1Pt + dyPt, x2Pt: x2Pt + dxPt, y2Pt: y2Pt + dyPt });
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
@@ -1257,8 +1307,17 @@ export function PdfEditorWorkspace() {
           const editFont = getFont(el.fontFamily, el.isBold, el.isItalic);
           const descentPt = el.heightPt * (1 - ASCENT_RATIO);
           const pad = 1.5;
+          // Growth beyond originalWidthPt is measured as "how much wider is the
+          // replacement than the original," both in the SAME (standard) font —
+          // not "how wide is the replacement vs. originalWidthPt" directly,
+          // which mixes widths from two different fonts (the original's real,
+          // possibly-embedded font vs. this standard substitute) and made the
+          // mask overflow past the true original background whenever the
+          // substitute simply rendered the same string wider than the original
+          // font did, even with no actual edit.
           const newTextWidthPt = el.text.trim() ? editFont.widthOfTextAtSize(el.text, el.fontSizePt) : 0;
-          const maskWidth = Math.max(el.widthPt, newTextWidthPt) + pad * 2;
+          const originalTextWidthPt = el.originalText.trim() ? editFont.widthOfTextAtSize(el.originalText, el.fontSizePt) : 0;
+          const maskWidth = el.originalWidthPt + Math.max(0, newTextWidthPt - originalTextWidthPt) + pad * 2;
           const [bgR, bgG, bgB] = hexToRgbFloat(el.bgColorHex);
 
           // Real editing of existing PDF text isn't possible without rewriting the
@@ -1308,10 +1367,10 @@ export function PdfEditorWorkspace() {
             const dropped = event.dataTransfer.files?.[0];
             if (dropped) loadFile(dropped);
           }}
-          className="flex min-h-100 flex-col items-center justify-center gap-4 rounded-xl p-10 text-center"
+          className="flex min-h-48 flex-col items-center justify-center gap-4 rounded-xl py-8 text-center"
         >
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <ToolIcon name="upload" className="h-7 w-7" />
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ToolIcon name="upload" className="h-6 w-6" />
           </span>
           <div>
             <p className="font-semibold text-base-content">Upload a PDF to start editing</p>
@@ -1319,9 +1378,16 @@ export function PdfEditorWorkspace() {
               Drag & drop a file here, or choose one from your device.
             </p>
           </div>
-          <button type="button" onClick={() => fileInputRef.current?.click()} className="btn btn-primary btn-md">
-            Choose File
-          </button>
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="btn btn-primary btn-md rounded-r-none"
+            >
+              Choose File
+            </button>
+            <UploadSourceMenu onFile={loadFile} />
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -1361,6 +1427,7 @@ export function PdfEditorWorkspace() {
     : 0;
   const selectedShapeElement =
     selectedElement && (selectedElement.type === "rect" || selectedElement.type === "ellipse") ? selectedElement : undefined;
+  const selectedLineElement = selectedElement && selectedElement.type === "line" ? selectedElement : undefined;
   const searchMatches = findAllMatches();
 
   return (
@@ -1565,7 +1632,7 @@ export function PdfEditorWorkspace() {
           {(close) => (
             <ul>
               {annotateTypes.map((annotateTool) => (
-                <li key={annotateTool.id}>
+                <li key={annotateTool.id} className={annotateTool.id === "draw" ? "group relative" : undefined}>
                   <button
                     type="button"
                     onClick={() => {
@@ -1577,6 +1644,79 @@ export function PdfEditorWorkspace() {
                     <ToolIcon name={annotateTool.icon} className="h-4 w-4" />
                     {annotateTool.label}
                   </button>
+
+                  {/* Pen gets its own color/thickness submenu instead of the plain
+                      toolbar swatch row other color-tools use — hovering the "Pen"
+                      row reveals it, matching how a submenu normally works, rather
+                      than showing settings somewhere else in the persistent toolbar. */}
+                  {annotateTool.id === "draw" && (
+                    <div
+                      onMouseDown={(event) => event.stopPropagation()}
+                      className="absolute top-0 left-full z-40 ml-1 hidden w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg group-hover:block"
+                    >
+                      <p className="mb-1.5 px-1 text-[10px] tracking-wide text-base-content/50 uppercase">Thickness</p>
+                      <div className="mb-2 flex items-center gap-1 px-1">
+                        <button
+                          type="button"
+                          onClick={() => setActivePenStrokeWidthPt((w) => Math.max(1, w - 1))}
+                          className="btn btn-ghost btn-xs btn-square"
+                          aria-label="Decrease pen thickness"
+                          title="Decrease pen thickness"
+                        >
+                          <ToolIcon name="minus" className="h-3 w-3" />
+                        </button>
+                        <span className="w-5 text-center text-xs tabular-nums text-base-content/70">
+                          {activePenStrokeWidthPt}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActivePenStrokeWidthPt((w) => Math.min(20, w + 1))}
+                          className="btn btn-ghost btn-xs btn-square"
+                          aria-label="Increase pen thickness"
+                          title="Increase pen thickness"
+                        >
+                          <ToolIcon name="plus" className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      <p className="mb-1.5 px-1 text-[10px] tracking-wide text-base-content/50 uppercase">Color</p>
+                      <div className="flex items-center gap-1.5 px-1">
+                        {colorSwatches.map((swatch) => (
+                          <button
+                            key={swatch.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveColorHex(resolveSwatchHex(swatch.id));
+                              handleToolClick("draw");
+                              close();
+                            }}
+                            aria-label={`Use ${swatch.id} color`}
+                            title={`${swatch.id} (${resolveSwatchHex(swatch.id)})`}
+                            className={`h-6 w-6 rounded-full ${swatch.className} ${
+                              activeColorHex === resolveSwatchHex(swatch.id)
+                                ? "ring-2 ring-base-content/40 ring-offset-2 ring-offset-base-100"
+                                : ""
+                            }`}
+                          />
+                        ))}
+                        <label
+                          className="relative flex h-6 w-6 items-center justify-center rounded-full border border-base-300"
+                          style={{ background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)" }}
+                          title="Custom color"
+                          aria-label="Choose a custom color"
+                        >
+                          <NativeColorInput
+                            value={activeColorHex}
+                            onChange={(color) => {
+                              setActiveColorHex(color);
+                              handleToolClick("draw");
+                            }}
+                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -1695,10 +1835,9 @@ export function PdfEditorWorkspace() {
               title="Custom color"
               aria-label="Choose a custom color"
             >
-              <input
-                type="color"
+              <NativeColorInput
                 value={activeColorHex}
-                onChange={(event) => setActiveColorHex(event.target.value)}
+                onChange={setActiveColorHex}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
             </label>
@@ -1900,7 +2039,7 @@ export function PdfEditorWorkspace() {
                     points={drawingPath.map((p) => `${p.x * scale},${p.y * scale}`).join(" ")}
                     fill="none"
                     stroke={activeColorHex}
-                    strokeWidth={2 * scale}
+                    strokeWidth={activePenStrokeWidthPt * scale}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -1918,7 +2057,7 @@ export function PdfEditorWorkspace() {
                         strokeWidth={el.strokeWidthPt * scale}
                         strokeLinecap="round"
                       />
-                      {activeTool === "erase" && (
+                      {(activeTool === "cursor" || activeTool === "erase") && (
                         <line
                           x1={el.x1Pt * scale}
                           y1={el.y1Pt * scale}
@@ -1927,11 +2066,8 @@ export function PdfEditorWorkspace() {
                           stroke="transparent"
                           strokeWidth={16}
                           strokeLinecap="round"
-                          style={{ pointerEvents: "stroke", cursor: "not-allowed" }}
-                          onMouseDown={(event) => {
-                            event.stopPropagation();
-                            removeElement(el.id);
-                          }}
+                          style={{ pointerEvents: "stroke", cursor: activeTool === "erase" ? "not-allowed" : "move" }}
+                          onMouseDown={(event) => startLineDrag(el, event)}
                         />
                       )}
                     </g>
@@ -1966,7 +2102,26 @@ export function PdfEditorWorkspace() {
               >
                 {pageElements
                   .filter((el) => el.type === "text-edit")
-                  .map((el) => (
+                  .map((el) => {
+                    // Same delta-based growth as the save-time mask (see
+                    // handleSave) — comparing the replacement's CSS-measured
+                    // width against the *original* text's CSS-measured width,
+                    // not against originalWidthPt directly, so the mask only
+                    // grows because of an actual edit, not because this CSS
+                    // substitute font simply renders the unedited original
+                    // wider than its true (possibly embedded) PDF font did.
+                    const family = el.fontFamily as FontFamilyGuess;
+                    const currentTextWidthPt = measureTextWidthPt(el.text, el.fontSizePt, family, el.isBold);
+                    const originalTextWidthPt = measureTextWidthPt(el.originalText, el.fontSizePt, family, el.isBold);
+                    const maskWidthPt = el.originalWidthPt + Math.max(0, currentTextWidthPt - originalTextWidthPt);
+                    return (
+                    // The outer wrapper stays sized to el.widthPt — that's what
+                    // gives the textarea inside enough room to render without
+                    // clipping (see buildTextEditElement). The background color
+                    // itself lives on a separate, independently-sized inner div
+                    // (maskWidthPt) so shrinking the visible mask back down to
+                    // the true original width doesn't also shrink the textarea
+                    // and reintroduce the clipping this was fixed for.
                     <div
                       key={el.id}
                       className="group absolute"
@@ -1975,10 +2130,13 @@ export function PdfEditorWorkspace() {
                         top: el.topPt * scale - 1.5 * scale,
                         width: el.widthPt * scale + 3 * scale,
                         height: el.heightPt * scale + 3 * scale,
-                        backgroundColor: el.bgColorHex,
                         pointerEvents: "auto",
                       }}
                     >
+                      <div
+                        className="absolute inset-y-0 left-0"
+                        style={{ width: maskWidthPt * scale + 3 * scale, backgroundColor: el.bgColorHex }}
+                      />
                       <button
                         type="button"
                         onClick={(event) => {
@@ -2025,7 +2183,12 @@ export function PdfEditorWorkspace() {
                         // line-height for the same font-size can run a couple pixels taller,
                         // which was enough to trigger the textarea's native vertical
                         // scrollbar even though nothing meaningful was actually clipped.
-                        className="h-full w-full resize-none overflow-hidden whitespace-pre border border-dashed border-transparent bg-transparent leading-none outline-none hover:border-base-content/20"
+                        // relative — without a position, this in-flow textarea painted
+                        // *behind* the absolutely-positioned mask div added just above it
+                        // (per CSS stacking order, positioned elements paint above in-flow
+                        // ones regardless of DOM order), hiding the text entirely even
+                        // though it was still there and still editable.
+                        className="relative h-full w-full resize-none overflow-hidden whitespace-pre border border-dashed border-transparent bg-transparent leading-none outline-none hover:border-base-content/20"
                         style={{
                           color: el.color,
                           fontSize: el.fontSizePt * scale,
@@ -2040,7 +2203,8 @@ export function PdfEditorWorkspace() {
                         }}
                       />
                     </div>
-                  ))}
+                    );
+                  })}
 
                 {pageElements
                   .filter((el) => el.type !== "path" && el.type !== "text-edit" && el.type !== "line")
@@ -2305,6 +2469,17 @@ export function PdfEditorWorkspace() {
                   onUpdate={(patch) => updateElement(selectedShapeElement.id, patch)}
                   onDuplicate={() => duplicateShapeElement(selectedShapeElement)}
                   onDelete={() => removeElement(selectedShapeElement.id)}
+                />
+              )}
+
+              {selectedLineElement && (
+                <LineEditToolbar
+                  key={selectedLineElement.id}
+                  element={selectedLineElement}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedLineElement.id, patch)}
+                  onDuplicate={() => duplicateLineElement(selectedLineElement)}
+                  onDelete={() => removeElement(selectedLineElement.id)}
                 />
               )}
               </div>

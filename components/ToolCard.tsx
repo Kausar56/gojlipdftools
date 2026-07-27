@@ -12,7 +12,12 @@ export function ToolCard({ tool }: { tool: Tool }) {
   return (
     <Link
       href={`/${tool.slug}`}
-      className="group card border border-base-300 bg-base-100 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
+      // outline (not border) for definition — glass's own CSS sets `border:
+      // none`, and its box-shadow already carries a white-tinted inset ring
+      // that all but disappears in light mode where the card itself is
+      // already near-white. outline is a separate property glass never
+      // touches, so this stays visible regardless of theme or backdrop.
+      className="group glass card p-5 outline-1 outline-base-content/10 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
     >
       <span
         className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-300 ${accentClasses[tool.accent]}`}
