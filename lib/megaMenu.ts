@@ -25,9 +25,12 @@ export const megaMenu: MegaMenuCategory[] = [
     title: "Split",
     items: [
       { label: "Split PDF", slug: "split-pdf" },
-      { label: "Extract Pages", description: "Pull out specific pages into a new PDF." },
+      // Both are just Split PDF used a specific way (one range group, or the
+      // built-in "Split in Half" shortcut already in that tool) — pointing
+      // them at the same slug instead of building near-duplicate tools.
+      { label: "Extract Pages", slug: "split-pdf" },
       { label: "Split by Bookmarks", description: "Break a PDF into files using its bookmark structure." },
-      { label: "Split in Half", description: "Divide a PDF into two equal halves." },
+      { label: "Split in Half", slug: "split-pdf" },
       { label: "Split by Size", description: "Split a PDF into parts under a target file size." },
       { label: "Split by Text", description: "Split a PDF wherever matching text appears." },
     ],
@@ -38,7 +41,7 @@ export const megaMenu: MegaMenuCategory[] = [
       { label: "Edit PDF", slug: "edit-pdf" },
       { label: "Fill & Sign", description: "Fill out form fields and add your signature." },
       { label: "Create Forms", description: "Add fillable text fields, checkboxes, and signatures." },
-      { label: "Delete Pages", description: "Remove unwanted pages from a PDF." },
+      { label: "Delete Pages", slug: "delete-pages" },
     ],
   },
   {
@@ -51,16 +54,16 @@ export const megaMenu: MegaMenuCategory[] = [
       { label: "PDF Password Protect", slug: "protect-pdf" },
       { label: "Unlock PDF", slug: "unlock-pdf" },
       { label: "Watermark PDF", slug: "watermark-pdf" },
-      { label: "Flatten", description: "Merge form fields and layers into static page content." },
+      { label: "Flatten", slug: "flatten-pdf" },
     ],
   },
   {
     title: "Convert from PDF",
     items: [
       { label: "PDF to Excel", description: "Turn tables in a PDF into an editable spreadsheet." },
-      { label: "PDF to JPG", description: "Save each PDF page as a JPG image." },
+      { label: "PDF to JPG", slug: "pdf-to-jpg" },
       { label: "PDF to PowerPoint", description: "Convert PDF pages into editable slides." },
-      { label: "PDF to Text", description: "Extract plain text content from a PDF." },
+      { label: "PDF to Text", slug: "pdf-to-text" },
       { label: "PDF to Word", slug: "pdf-to-word" },
     ],
   },
@@ -77,20 +80,22 @@ export const megaMenu: MegaMenuCategory[] = [
   {
     title: "Other",
     items: [
-      { label: "Bates Numbering", description: "Stamp sequential legal numbering on every page." },
+      // Same tool, flexible enough to cover both a plain page number and a
+      // Bates-style prefix + zero-padded sequence.
+      { label: "Bates Numbering", slug: "page-numbers" },
       { label: "Create Bookmarks", description: "Add a navigable outline to a PDF." },
       { label: "Crop", description: "Trim the margins or visible area of PDF pages." },
-      { label: "Edit Metadata", description: "Change a PDF's title, author, and other properties." },
+      { label: "Edit Metadata", slug: "edit-metadata" },
       { label: "Extract Images", description: "Save every embedded image out of a PDF." },
       { label: "Flip", description: "Mirror PDF pages horizontally or vertically." },
       { label: "Grayscale", description: "Convert a color PDF to black and white." },
-      { label: "Header & Footer", description: "Add running text, page numbers, or dates to every page." },
+      { label: "Header & Footer", slug: "header-footer" },
       { label: "N-up", description: "Print multiple pages onto a single sheet." },
-      { label: "Page Numbers", description: "Stamp page numbers onto every page." },
+      { label: "Page Numbers", slug: "page-numbers" },
       { label: "Repair", description: "Attempt to fix a corrupted or unreadable PDF." },
-      { label: "Resize", description: "Change the page size of a PDF." },
+      { label: "Resize", slug: "resize-pdf" },
       { label: "Rotate PDF", slug: "rotate-pdf" },
-      { label: "Remove Annotations", description: "Strip comments, highlights, and markup from a PDF." },
+      { label: "Remove Annotations", slug: "remove-annotations" },
     ],
   },
   {

@@ -65,7 +65,11 @@ export function ToolGrid({ tools }: { tools: Tool[] }) {
               const tool = item.slug ? bySlug.get(item.slug) : undefined;
               return (
                 <Reveal key={item.label} delayMs={Math.min(index, 7) * 60}>
-                  {tool ? <ToolCard tool={tool} /> : <DisabledToolCard label={item.label} description={item.description} />}
+                  {tool ? (
+                    <ToolCard tool={tool} label={item.label === tool.name ? undefined : item.label} />
+                  ) : (
+                    <DisabledToolCard label={item.label} description={item.description} />
+                  )}
                 </Reveal>
               );
             })}

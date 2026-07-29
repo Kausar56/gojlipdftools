@@ -75,14 +75,19 @@ export function MegaMenu() {
 
                     if (tool) {
                       return (
-                        <li key={tool.slug}>
+                        // Keyed and labeled by the menu item, not the tool —
+                        // a few items (e.g. "Extract Pages", "Split in Half")
+                        // intentionally point at the same underlying tool
+                        // (split-pdf) instead of a near-duplicate page, so
+                        // tool.slug alone isn't unique within a category.
+                        <li key={item.label}>
                           <Link
                             href={`/${tool.slug}`}
                             onClick={() => setOpen(false)}
                             className="flex items-center gap-2 text-sm text-base-content/80 hover:text-primary"
                           >
                             <ToolIcon name={tool.icon} className={`h-4 w-4 ${accentTextClasses[tool.accent]}`} />
-                            {tool.name}
+                            {item.label}
                           </Link>
                         </li>
                       );

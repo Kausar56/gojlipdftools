@@ -458,6 +458,249 @@ export const tools: Tool[] = [
       { question: "Which languages are supported?", answer: "English and Bengali are supported to start, with more planned." },
     ],
   },
+  {
+    slug: "delete-pages",
+    name: "Delete Pages",
+    shortDescription: "Remove unwanted pages from a PDF.",
+    heroDescription: "Remove unwanted pages from a PDF.",
+    accent: "accent",
+    category: "core",
+    icon: "split",
+    accept: "application/pdf",
+    guideIntro:
+      "Blank pages, duplicates, or sections you no longer need are easy to remove without touching the rest of the document. Gojli's Delete Pages tool lets you pick exactly which pages to drop.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file with pages you want to remove." },
+      {
+        title: "List the pages to delete",
+        description: "Type in page numbers or ranges — like 1, 3-5 — for everything you want removed.",
+      },
+      {
+        title: "Download the result",
+        description: "Gojli rebuilds the PDF without those pages and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Can I delete every page?", answer: "No, at least one page must remain in the resulting PDF." },
+      { question: "Does this affect page quality?", answer: "No, the remaining pages are copied over exactly as they were." },
+    ],
+  },
+  {
+    slug: "edit-metadata",
+    name: "Edit Metadata",
+    shortDescription: "Change a PDF's title, author, and other properties.",
+    heroDescription: "Change a PDF's title, author, and other properties.",
+    accent: "primary",
+    category: "core",
+    icon: "file",
+    accept: "application/pdf",
+    guideIntro:
+      "A PDF's title, author, and subject show up in file browsers, search results, and document properties dialogs. Gojli's Edit Metadata tool lets you update them directly.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file whose properties you want to change." },
+      {
+        title: "Update the details",
+        description: "Edit the title, author, subject, and keywords fields as needed.",
+      },
+      {
+        title: "Download the updated PDF",
+        description: "Download the same PDF with its metadata updated — the content itself is untouched.",
+      },
+    ],
+    faqs: [
+      { question: "Does this change the PDF's content?", answer: "No, only the document properties are updated — pages stay exactly the same." },
+      { question: "Can I clear a field entirely?", answer: "Yes, leave it blank and it will be saved as empty." },
+    ],
+  },
+  {
+    slug: "flatten-pdf",
+    name: "Flatten PDF",
+    shortDescription: "Merge form fields and layers into static page content.",
+    heroDescription: "Merge form fields and layers into static page content.",
+    accent: "secondary",
+    category: "core",
+    icon: "form-field",
+    accept: "application/pdf",
+    guideIntro:
+      "A filled-out form is still editable until it's flattened — the field values become permanent, static page content that can't be accidentally changed. Gojli's Flatten tool does this in one click.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF with form fields you want to lock in place." },
+      {
+        title: "Flatten the form",
+        description: "Gojli merges every field's current value into the page content and removes the interactive form.",
+      },
+      {
+        title: "Download the flattened PDF",
+        description: "Download the result — field values are now permanent and can no longer be edited as a form.",
+      },
+    ],
+    faqs: [
+      { question: "Can I undo a flatten?", answer: "Not on the same file — keep a copy of the original if you might need to edit the form again." },
+      { question: "Does this work on PDFs without forms?", answer: "It's safe to run, but there's nothing to flatten if the PDF has no form fields." },
+    ],
+  },
+  {
+    slug: "remove-annotations",
+    name: "Remove Annotations",
+    shortDescription: "Strip comments, highlights, and markup from a PDF.",
+    heroDescription: "Strip comments, highlights, and markup from a PDF.",
+    accent: "accent",
+    category: "core",
+    icon: "highlighter",
+    accept: "application/pdf",
+    guideIntro:
+      "Comments, highlights, sticky notes, and other markup can pile up after a document's been through several rounds of review. Gojli's Remove Annotations tool strips all of it, leaving just the underlying page content.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF with comments or markup you want removed." },
+      {
+        title: "Remove all annotations",
+        description: "Gojli clears every comment, highlight, stamp, and markup layer from each page.",
+      },
+      {
+        title: "Download the clean PDF",
+        description: "Download the PDF with only the original page content remaining.",
+      },
+    ],
+    faqs: [
+      { question: "Does this remove form fields too?", answer: "No, this only targets comments and markup annotations, not fillable form fields." },
+      { question: "Can I choose which annotations to keep?", answer: "Not yet — this removes all of them at once." },
+    ],
+  },
+  {
+    slug: "resize-pdf",
+    name: "Resize PDF",
+    shortDescription: "Change the page size of a PDF.",
+    heroDescription: "Change the page size of a PDF.",
+    accent: "primary",
+    category: "core",
+    icon: "shape-rect",
+    accept: "application/pdf",
+    guideIntro:
+      "Need a document in A4 instead of Letter, or scaled up for printing? Gojli's Resize PDF tool changes every page's dimensions while scaling the content to match.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to resize." },
+      {
+        title: "Pick a page size",
+        description: "Choose a standard size like A4 or Letter, or set custom dimensions.",
+      },
+      {
+        title: "Download the resized PDF",
+        description: "Gojli scales every page's content to fit the new size and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Will content get cut off?", answer: "No, page content is scaled proportionally to fit the new page size." },
+      { question: "Does this affect all pages?", answer: "Yes, the new size is applied to every page in the document." },
+    ],
+  },
+  {
+    slug: "pdf-to-text",
+    name: "PDF to Text",
+    shortDescription: "Extract plain text content from a PDF.",
+    heroDescription: "Extract plain text content from a PDF.",
+    accent: "secondary",
+    category: "convert",
+    icon: "file",
+    accept: "application/pdf",
+    guideIntro:
+      "Sometimes you just need the words, not the formatting. Gojli's PDF to Text tool pulls the plain text content out of a PDF and gives you a downloadable .txt file.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to extract text from." },
+      {
+        title: "Let Gojli read it",
+        description: "Text is extracted from every page directly in your browser.",
+      },
+      {
+        title: "Download the text file",
+        description: "Download a plain .txt file containing the extracted content, page by page.",
+      },
+    ],
+    faqs: [
+      { question: "Does this work on scanned PDFs?", answer: "Only if the PDF already has a text layer — for scanned images, run OCR first." },
+      { question: "Is formatting preserved?", answer: "No, this extracts plain text only, without fonts, layout, or images." },
+    ],
+  },
+  {
+    slug: "pdf-to-jpg",
+    name: "PDF to JPG",
+    shortDescription: "Save each PDF page as a JPG image.",
+    heroDescription: "Save each PDF page as a JPG image.",
+    accent: "accent",
+    category: "convert",
+    icon: "image-to-pdf",
+    accept: "application/pdf",
+    guideIntro:
+      "Need a page as an image for a slide deck or a quick preview? Gojli's PDF to JPG tool renders every page as its own downloadable JPG image, directly in your browser.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to convert to images." },
+      {
+        title: "Let Gojli render each page",
+        description: "Every page is rendered to a high-quality JPG image locally in your browser.",
+      },
+      {
+        title: "Download your images",
+        description: "Download each page individually, or grab all of them at once as a .zip file.",
+      },
+    ],
+    faqs: [
+      { question: "Can I control image quality?", answer: "Pages are rendered at a high, print-friendly resolution by default." },
+      { question: "Can I convert just one page?", answer: "Yes, you can download individual pages instead of the full set." },
+    ],
+  },
+  {
+    slug: "page-numbers",
+    name: "Page Numbers",
+    shortDescription: "Stamp page numbers onto every page.",
+    heroDescription: "Stamp page numbers onto every page, including Bates-style legal numbering.",
+    accent: "primary",
+    category: "core",
+    icon: "text-multiline",
+    accept: "application/pdf",
+    guideIntro:
+      "From simple page counters to Bates-style legal numbering, Gojli's Page Numbers tool stamps a consistent number onto every page, with control over position, starting number, and an optional prefix.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to number." },
+      {
+        title: "Set the format and position",
+        description: "Choose a starting number, an optional prefix (for Bates numbering), digit padding, and where the number appears on the page.",
+      },
+      {
+        title: "Download your numbered PDF",
+        description: "Gojli stamps every page and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Can I do Bates numbering for legal documents?", answer: "Yes, set a prefix and digit padding, like ABC-000001, and it increments across every page." },
+      { question: "Can I start from a number other than 1?", answer: "Yes, you can set any starting number." },
+    ],
+  },
+  {
+    slug: "header-footer",
+    name: "Header & Footer",
+    shortDescription: "Add running text, page numbers, or dates to every page.",
+    heroDescription: "Add running text, page numbers, or dates to every page.",
+    accent: "secondary",
+    category: "core",
+    icon: "text-multiline",
+    accept: "application/pdf",
+    guideIntro:
+      "Add a consistent header or footer — a document title, date, or confidentiality notice — across every page. Gojli's Header & Footer tool stamps left, center, and right text zones onto your PDF.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to add a header or footer to." },
+      {
+        title: "Type your header/footer text",
+        description: "Fill in any combination of left, center, and right text for the header and footer — use {page} and {pages} for page numbers.",
+      },
+      {
+        title: "Download the result",
+        description: "Gojli stamps the text onto every page and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Can I include page numbers in the footer text?", answer: "Yes, use {page} for the current page and {pages} for the total page count." },
+      { question: "Can I leave the header empty and only add a footer?", answer: "Yes, any of the six text zones can be left blank." },
+    ],
+  },
 ];
 
 export function getToolBySlug(slug: string): Tool | undefined {

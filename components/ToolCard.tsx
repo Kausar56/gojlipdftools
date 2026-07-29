@@ -8,7 +8,7 @@ const accentClasses: Record<Tool["accent"], string> = {
   accent: "bg-accent/10 text-accent group-hover:bg-accent group-hover:text-accent-content",
 };
 
-export function ToolCard({ tool }: { tool: Tool }) {
+export function ToolCard({ tool, label }: { tool: Tool; label?: string }) {
   return (
     <Link
       href={`/${tool.slug}`}
@@ -24,7 +24,11 @@ export function ToolCard({ tool }: { tool: Tool }) {
       >
         <ToolIcon name={tool.icon} className="h-5 w-5" />
       </span>
-      <h3 className="mt-3 text-base font-semibold text-base-content">{tool.name}</h3>
+      {/* label overrides tool.name for menu items that intentionally share a
+          tool (e.g. "Extract Pages" pointing at Split PDF) — without this,
+          every such item would show the same underlying tool's name, making
+          the grid look like it has duplicate cards. */}
+      <h3 className="mt-3 text-base font-semibold text-base-content">{label ?? tool.name}</h3>
       <p className="mt-1 text-sm text-base-content/70">{tool.shortDescription}</p>
     </Link>
   );
