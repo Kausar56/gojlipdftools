@@ -25,13 +25,33 @@ const spaceGrotesk = Space_Grotesk({
   weight: ["500", "600", "700"],
 });
 
+const siteUrl = "https://www.gojli.com";
+const siteName = "Gojli";
+const siteDescription =
+  "Free, browser-based PDF tools to merge, split, compress, and convert PDF files online. No installation required.";
+
 export const metadata: Metadata = {
+  // Lets Next.js resolve relative asset paths (like the auto-generated
+  // opengraph-image below) into the absolute URLs social platforms require —
+  // without this, Next.js can't build correct og:image/twitter:image tags.
+  metadataBase: new URL(siteUrl),
   title: {
     default: "Gojli — Merge, Split, Compress & Convert PDFs Online",
     template: "%s | Gojli",
   },
-  description:
-    "Free, browser-based PDF tools to merge, split, compress, and convert PDF files online. No installation required.",
+  description: siteDescription,
+  openGraph: {
+    type: "website",
+    siteName,
+    title: "Gojli — Merge, Split, Compress & Convert PDFs Online",
+    description: siteDescription,
+    url: siteUrl,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Gojli — Merge, Split, Compress & Convert PDFs Online",
+    description: siteDescription,
+  },
 };
 
 const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dark':'light');}catch(e){}})();`;

@@ -1,7 +1,14 @@
 import type { MetadataRoute } from "next";
 import { tools } from "@/lib/tools";
 
-const baseUrl = "https://example.com";
+const baseUrl = "https://www.gojli.com";
+
+const staticPages = [
+  { path: "/about", changeFrequency: "monthly" as const, priority: 0.5 },
+  { path: "/pricing", changeFrequency: "monthly" as const, priority: 0.6 },
+  { path: "/privacy", changeFrequency: "yearly" as const, priority: 0.3 },
+  { path: "/terms", changeFrequency: "yearly" as const, priority: 0.3 },
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const toolRoutes: MetadataRoute.Sitemap = tools.map((tool) => ({
@@ -9,6 +16,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: new Date(),
     changeFrequency: "monthly",
     priority: 0.8,
+  }));
+
+  const staticRoutes: MetadataRoute.Sitemap = staticPages.map((page) => ({
+    url: `${baseUrl}${page.path}`,
+    lastModified: new Date(),
+    changeFrequency: page.changeFrequency,
+    priority: page.priority,
   }));
 
   return [
@@ -19,5 +33,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     ...toolRoutes,
+    ...staticRoutes,
   ];
 }

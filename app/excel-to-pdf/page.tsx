@@ -2,13 +2,11 @@ import type { Metadata } from "next";
 import { ToolPageLayout } from "@/components/ToolPageLayout";
 import { OfficeConvertWorkspace } from "@/components/OfficeConvertWorkspace";
 import { getToolBySlug } from "@/lib/tools";
+import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("excel-to-pdf")!;
 
-export const metadata: Metadata = {
-  title: tool.name,
-  description: tool.heroDescription,
-};
+export const metadata: Metadata = toolMetadata(tool);
 
 export default function ExcelToPdfPage() {
   return (

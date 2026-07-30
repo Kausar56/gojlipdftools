@@ -1,0 +1,16 @@
+{
+  "name": "Gojli — PDF Tools",
+  "short_name": "Gojli",
+  "description": "Free, browser-based PDF tools to merge, split, compress, and convert PDF files online.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2663bb",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

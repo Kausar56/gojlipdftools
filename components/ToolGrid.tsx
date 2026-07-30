@@ -40,7 +40,7 @@ export function ToolGrid({ tools }: { tools: Tool[] }) {
   return (
     <div className="space-y-12">
       <div>
-        <h3 className="mb-4 text-lg font-semibold text-base-content">Most Popular</h3>
+        <h2 className="mb-4 text-lg font-semibold text-base-content">Most Popular</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {mostPopular.map((tool, index) => (
             <Reveal key={tool.slug} delayMs={Math.min(index, 7) * 60}>
@@ -53,7 +53,7 @@ export function ToolGrid({ tools }: { tools: Tool[] }) {
       {megaMenu.map((category) => (
         <div key={category.title}>
           <Reveal>
-            <h3 className="mb-4 text-lg font-semibold text-base-content">{category.title}</h3>
+            <h2 className="mb-4 text-lg font-semibold text-base-content">{category.title}</h2>
           </Reveal>
           {/* Each card gets its own Reveal (like Most Popular above) instead of
               one Reveal wrapping the whole category — animating the entire
