@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 type Position = "bottom-center" | "bottom-right" | "bottom-left" | "top-center" | "top-right" | "top-left";
@@ -95,9 +96,7 @@ export function PageNumbersWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't add page numbers: ${error.message}` : "Couldn't add page numbers to this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't add page numbers: ${error.message}` : "Couldn't add page numbers to this PDF.",));
     }
   }
 

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { parsePageList } from "@/lib/pageRanges";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "rotating" | "done" | "error";
 
@@ -37,9 +38,11 @@ export function RotatePdfWorkspace() {
       const bytes = await selected.arrayBuffer();
       const doc = await PDFDocument.load(bytes);
       setTotalPages(doc.getPageCount());
-    } catch {
+    } catch (error) {
       setStatus("error");
-      setErrorMessage("Couldn't read this file — make sure it's a valid PDF.");
+      setErrorMessage(
+        describeError(error, "Couldn't read this file — make sure it's a valid PDF."),
+      );
     }
   }
 
@@ -86,9 +89,7 @@ export function RotatePdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't rotate this PDF: ${error.message}` : "Couldn't rotate this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't rotate this PDF: ${error.message}` : "Couldn't rotate this PDF.",));
     }
   }
 

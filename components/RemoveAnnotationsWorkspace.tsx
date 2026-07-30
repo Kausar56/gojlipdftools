@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -52,9 +53,7 @@ export function RemoveAnnotationsWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't remove annotations: ${error.message}` : "Couldn't remove annotations from this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't remove annotations: ${error.message}` : "Couldn't remove annotations from this PDF.",));
     }
   }
 

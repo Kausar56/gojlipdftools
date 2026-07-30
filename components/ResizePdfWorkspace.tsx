@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 type PresetId = "a4" | "letter" | "legal" | "custom";
@@ -69,9 +70,7 @@ export function ResizePdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't resize this PDF: ${error.message}` : "Couldn't resize this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't resize this PDF: ${error.message}` : "Couldn't resize this PDF.",));
     }
   }
 

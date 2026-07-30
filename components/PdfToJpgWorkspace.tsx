@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { loadPdfjs } from "@/lib/pdfjs";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 type ResultItem = { label: string; filename: string; url: string };
@@ -74,9 +75,7 @@ export function PdfToJpgWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't convert this PDF: ${error.message}` : "Couldn't convert this PDF to images.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't convert this PDF: ${error.message}` : "Couldn't convert this PDF to images.",));
     }
   }
 

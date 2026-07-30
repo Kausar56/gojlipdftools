@@ -13,6 +13,7 @@ import { UploadSourceMenu } from "./UploadSourceMenu";
 import { colorSwatches, hexToRgbFloat, resolveSwatchHex } from "@/lib/colorSwatches";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { createElementId, type DetectedTextItem, type EditorElement, type Point } from "@/lib/editorElements";
+import { describeError } from "@/lib/errorHelpers";
 import {
   sampleTextBackgroundColor,
   sampleTextInkColor,
@@ -1351,9 +1352,7 @@ export function PdfEditorWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't save this PDF: ${error.message}` : "Couldn't save this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't save this PDF: ${error.message}` : "Couldn't save this PDF.",));
     }
   }
 

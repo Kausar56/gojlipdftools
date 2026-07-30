@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { parsePageList } from "@/lib/pageRanges";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -33,9 +34,11 @@ export function DeletePagesWorkspace() {
       const bytes = await selected.arrayBuffer();
       const doc = await PDFDocument.load(bytes);
       setTotalPages(doc.getPageCount());
-    } catch {
+    } catch (error) {
       setStatus("error");
-      setErrorMessage("Couldn't read this file — make sure it's a valid PDF.");
+      setErrorMessage(
+        describeError(error, "Couldn't read this file — make sure it's a valid PDF."),
+      );
     }
   }
 
@@ -76,9 +79,7 @@ export function DeletePagesWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't delete pages: ${error.message}` : "Couldn't delete pages from this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't delete pages: ${error.message}` : "Couldn't delete pages from this PDF.",));
     }
   }
 

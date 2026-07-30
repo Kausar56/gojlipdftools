@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -46,9 +47,7 @@ export function FlattenPdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't flatten this PDF: ${error.message}` : "Couldn't flatten this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't flatten this PDF: ${error.message}` : "Couldn't flatten this PDF.",));
     }
   }
 

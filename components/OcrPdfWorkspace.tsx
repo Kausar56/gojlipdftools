@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { loadPdfjs } from "@/lib/pdfjs";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "processing" | "done" | "error";
 type LangCode = "eng" | "ben";
@@ -45,9 +46,11 @@ export function OcrPdfWorkspace() {
       const pdfjs = await loadPdfjs();
       const doc = await pdfjs.getDocument({ data: await selected.arrayBuffer() }).promise;
       setPageCount(doc.numPages);
-    } catch {
+    } catch (error) {
       setStatus("error");
-      setErrorMessage("Couldn't read this file — make sure it's a valid PDF.");
+      setErrorMessage(
+        describeError(error, "Couldn't read this file — make sure it's a valid PDF."),
+      );
     }
   }
 
@@ -144,9 +147,7 @@ export function OcrPdfWorkspace() {
       setProgressLabel("Done.");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't run OCR on this PDF: ${error.message}` : "Couldn't run OCR on this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't run OCR on this PDF: ${error.message}` : "Couldn't run OCR on this PDF.",));
     }
   }
 

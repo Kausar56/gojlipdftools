@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
+import { describeError } from "@/lib/errorHelpers";
 
 type ImageItem = {
   id: string;
@@ -99,11 +100,9 @@ export function JpgToPdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error
+      setErrorMessage(describeError(error, error instanceof Error
           ? `Couldn't convert these images: ${error.message}`
-          : "Couldn't convert these images.",
-      );
+          : "Couldn't convert these images.",));
     }
   }
 

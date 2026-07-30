@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -44,9 +45,11 @@ export function EditMetadataWorkspace() {
         subject: doc.getSubject() ?? "",
         keywords: doc.getKeywords() ?? "",
       });
-    } catch {
+    } catch (error) {
       setStatus("error");
-      setErrorMessage("Couldn't read this file — make sure it's a valid PDF.");
+      setErrorMessage(
+        describeError(error, "Couldn't read this file — make sure it's a valid PDF."),
+      );
     }
   }
 
@@ -77,9 +80,7 @@ export function EditMetadataWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't update metadata: ${error.message}` : "Couldn't update this PDF's metadata.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't update metadata: ${error.message}` : "Couldn't update this PDF's metadata.",));
     }
   }
 

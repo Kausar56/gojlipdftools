@@ -150,11 +150,20 @@ export function TextEditToolbar({
         <button
           type="button"
           onClick={() => setOpenMenu((current) => (current === "color" ? null : "color"))}
-          className="btn btn-ghost btn-xs btn-square"
-          title="Text color"
+          className="btn btn-ghost btn-xs btn-square relative"
+          title={`Text color (currently ${element.color})`}
           style={{ color: element.color }}
         >
           <ToolIcon name="palette" className="h-3.5 w-3.5" />
+          {/* A solid swatch, not just the icon's own stroke tint — for a
+              faint/light detected color (a common case for faded original
+              text), the thin icon outline barely showed the actual shade,
+              so it didn't read as "auto-selected" even though element.color
+              was already correct. */}
+          <span
+            className="absolute right-0 bottom-0 h-2 w-2 rounded-full border border-base-100"
+            style={{ backgroundColor: element.color }}
+          />
         </button>
         {openMenu === "color" && (
           <div className="absolute top-full left-0 z-30 mt-1 flex gap-2 rounded-box bg-base-100 p-2 shadow-lg">

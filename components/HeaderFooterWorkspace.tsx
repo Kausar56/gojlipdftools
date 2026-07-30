@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -111,9 +112,7 @@ export function HeaderFooterWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't add header/footer: ${error.message}` : "Couldn't add a header or footer to this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't add header/footer: ${error.message}` : "Couldn't add a header or footer to this PDF.",));
     }
   }
 

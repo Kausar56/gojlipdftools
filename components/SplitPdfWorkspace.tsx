@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { parsePageGroups } from "@/lib/pageRanges";
+import { describeError } from "@/lib/errorHelpers";
 
 type ResultItem = {
   label: string;
@@ -47,9 +48,11 @@ export function SplitPdfWorkspace() {
       const bytes = await selected.arrayBuffer();
       const doc = await PDFDocument.load(bytes);
       setTotalPages(doc.getPageCount());
-    } catch {
+    } catch (error) {
       setStatus("error");
-      setErrorMessage("Couldn't read this file — make sure it's a valid PDF.");
+      setErrorMessage(
+        describeError(error, "Couldn't read this file — make sure it's a valid PDF."),
+      );
     }
   }
 
@@ -101,11 +104,9 @@ export function SplitPdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error
+      setErrorMessage(describeError(error, error instanceof Error
           ? `Couldn't split this PDF: ${error.message}`
-          : "Couldn't split this PDF.",
-      );
+          : "Couldn't split this PDF.",));
     }
   }
 

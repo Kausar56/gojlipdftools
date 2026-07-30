@@ -5,6 +5,7 @@ import type { PDFRef } from "pdf-lib";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { formatBytes } from "@/lib/format";
+import { describeError } from "@/lib/errorHelpers";
 
 type Level = "low" | "recommended" | "extreme";
 type Status = "idle" | "compressing" | "done" | "error";
@@ -135,11 +136,9 @@ export function CompressPdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error
+      setErrorMessage(describeError(error, error instanceof Error
           ? `Couldn't compress this PDF: ${error.message}`
-          : "Couldn't compress this PDF.",
-      );
+          : "Couldn't compress this PDF.",));
     }
   }
 

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -49,13 +50,11 @@ export function UnlockPdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error && error.message.includes("Incorrect password")
+      setErrorMessage(describeError(error, error instanceof Error && error.message.includes("Incorrect password")
           ? "That password doesn't match this PDF."
           : error instanceof Error
             ? error.message
-            : "Couldn't unlock this PDF.",
-      );
+            : "Couldn't unlock this PDF.",));
     }
   }
 

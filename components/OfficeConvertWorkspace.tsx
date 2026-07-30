@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { ConvertError, convertViaCloudConvert } from "@/lib/convertClient";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -53,7 +54,7 @@ export function OfficeConvertWorkspace({
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(error instanceof Error ? error.message : "Couldn't convert this file.");
+      setErrorMessage(describeError(error, error instanceof Error ? error.message : "Couldn't convert this file."));
       setErrorCode(error instanceof ConvertError ? error.code : undefined);
     }
   }

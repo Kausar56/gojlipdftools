@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { describeError } from "@/lib/errorHelpers";
 
 type FileItem = {
   id: string;
@@ -79,11 +80,9 @@ export function MergePdfWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error
+      setErrorMessage(describeError(error, error instanceof Error
           ? `Couldn't merge these files: ${error.message}`
-          : "Couldn't merge these files. Make sure they're all valid PDFs.",
-      );
+          : "Couldn't merge these files. Make sure they're all valid PDFs.",));
     }
   }
 

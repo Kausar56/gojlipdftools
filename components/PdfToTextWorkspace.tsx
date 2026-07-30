@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { loadPdfjs } from "@/lib/pdfjs";
+import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
@@ -53,9 +54,7 @@ export function PdfToTextWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        error instanceof Error ? `Couldn't extract text: ${error.message}` : "Couldn't extract text from this PDF.",
-      );
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't extract text: ${error.message}` : "Couldn't extract text from this PDF.",));
     }
   }
 
