@@ -3,18 +3,20 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
-import { parsePageList } from "@/lib/pageRanges";
+import { loadPdfjs } from "@/lib/pdfjs";
 import { describeError } from "@/lib/errorHelpers";
 
-type Status = "idle" | "rotating" | "done" | "error";
+type Status = "idle" | "rendering" | "rotating" | "done" | "error";
+
+const THUMB_WIDTH = 200;
 
 export function RotatePdfWorkspace() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [totalPages, setTotalPages] = useState<number | null>(null);
-  const [rotation, setRotation] = useState(0);
-  const [applyToAll, setApplyToAll] = useState(true);
-  const [pagesInput, setPagesInput] = useState("");
+  // One thumbnail + one independent rotation delta per page, so each page can
+  // be turned however the user wants instead of one angle for the whole file.
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
+  const [rotations, setRotations] = useState<number[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -29,44 +31,55 @@ export function RotatePdfWorkspace() {
   async function loadFile(selected: File) {
     resetOutput();
     setFile(selected);
-    setTotalPages(null);
-    setRotation(0);
-    setApplyToAll(true);
-    setPagesInput("");
+    setThumbnails([]);
+    setRotations([]);
+    setStatus("rendering");
+
     try {
-      const { PDFDocument } = await import("pdf-lib");
+      const pdfjs = await loadPdfjs();
       const bytes = await selected.arrayBuffer();
-      const doc = await PDFDocument.load(bytes);
-      setTotalPages(doc.getPageCount());
+      const doc = await pdfjs.getDocument({ data: bytes }).promise;
+      const thumbs: string[] = [];
+
+      for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+        const page = await doc.getPage(pageNumber);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: THUMB_WIDTH / baseViewport.width });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+        thumbs.push(canvas.toDataURL("image/jpeg", 0.8));
+      }
+
+      setThumbnails(thumbs);
+      setRotations(new Array(thumbs.length).fill(0));
+      setStatus("idle");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(
-        describeError(error, "Couldn't read this file — make sure it's a valid PDF."),
-      );
+      setErrorMessage(describeError(error, "Couldn't read this file — make sure it's a valid PDF."));
     }
   }
 
-  function turn(direction: -1 | 1) {
-    setRotation((prev) => (prev + direction * 90 + 360) % 360);
+  function turnPage(index: number, direction: -1 | 1) {
+    setRotations((prev) => prev.map((rot, i) => (i === index ? (rot + direction * 90 + 360) % 360 : rot)));
+    resetOutput();
+  }
+
+  function turnAll(direction: -1 | 1) {
+    setRotations((prev) => prev.map((rot) => (rot + direction * 90 + 360) % 360));
+    resetOutput();
+  }
+
+  function resetAll() {
+    setRotations((prev) => prev.map(() => 0));
     resetOutput();
   }
 
   async function handleRotate() {
-    if (!file || !totalPages) return;
-
-    let targetPages: number[];
-    if (applyToAll) {
-      targetPages = Array.from({ length: totalPages }, (_, index) => index);
-    } else {
-      const parsed = parsePageList(pagesInput, totalPages);
-      if ("error" in parsed) {
-        setStatus("error");
-        setErrorMessage(parsed.error);
-        return;
-      }
-      targetPages = parsed;
-    }
-
+    if (!file || rotations.length === 0) return;
     setStatus("rotating");
     setErrorMessage("");
 
@@ -74,12 +87,12 @@ export function RotatePdfWorkspace() {
       const { PDFDocument, degrees } = await import("pdf-lib");
       const bytes = await file.arrayBuffer();
       const doc = await PDFDocument.load(bytes);
-      const targetSet = new Set(targetPages);
 
       doc.getPages().forEach((page, index) => {
-        if (!targetSet.has(index)) return;
+        const delta = rotations[index] ?? 0;
+        if (delta === 0) return;
         const current = page.getRotation().angle;
-        page.setRotation(degrees((current + rotation) % 360));
+        page.setRotation(degrees((current + delta) % 360));
       });
 
       const outBytes = await doc.save();
@@ -92,6 +105,8 @@ export function RotatePdfWorkspace() {
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't rotate this PDF: ${error.message}` : "Couldn't rotate this PDF.",));
     }
   }
+
+  const hasAnyRotation = rotations.some((rot) => rot !== 0);
 
   if (!file) {
     return (
@@ -138,13 +153,14 @@ export function RotatePdfWorkspace() {
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name="rotate-pdf" className="h-4 w-4 text-secondary" />
           <span className="truncate text-base-content/80">{file.name}</span>
-          {totalPages && <span className="badge badge-neutral badge-sm">{totalPages} pages</span>}
+          {thumbnails.length > 0 && <span className="badge badge-neutral badge-sm">{thumbnails.length} pages</span>}
         </span>
         <button
           type="button"
           onClick={() => {
             setFile(null);
-            setTotalPages(null);
+            setThumbnails([]);
+            setRotations([]);
             resetOutput();
           }}
           className="text-xs text-base-content/50 hover:text-error"
@@ -153,57 +169,70 @@ export function RotatePdfWorkspace() {
         </button>
       </div>
 
-      {totalPages && (
-        <div className="mt-6 flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:justify-center">
-          <div className="flex flex-col items-center gap-2">
-            <div
-              className="flex h-32 w-24 items-center justify-center rounded-sm border border-base-300 bg-base-200 text-xs text-base-content/50 shadow-sm transition-transform"
-              style={{ transform: `rotate(${rotation}deg)` }}
-            >
-              Page
-            </div>
-            <span className="text-xs text-base-content/50">{rotation}°</span>
-          </div>
+      {status === "rendering" && (
+        <p className="mt-6 text-center text-sm text-base-content/60">Rendering page previews...</p>
+      )}
 
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-2">
-              <button type="button" onClick={() => turn(-1)} className="btn btn-outline btn-sm" aria-label="Rotate left">
-                <ToolIcon name="undo" className="h-4 w-4" />
-                Rotate Left
+      {thumbnails.length > 0 && (
+        <>
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => turnAll(-1)} className="btn btn-outline btn-sm">
+              <ToolIcon name="undo" className="h-4 w-4" />
+              Rotate All Left
+            </button>
+            <button type="button" onClick={() => turnAll(1)} className="btn btn-outline btn-sm">
+              <ToolIcon name="redo" className="h-4 w-4" />
+              Rotate All Right
+            </button>
+            {hasAnyRotation && (
+              <button type="button" onClick={resetAll} className="text-xs text-primary hover:underline">
+                Reset all
               </button>
-              <button type="button" onClick={() => turn(1)} className="btn btn-outline btn-sm" aria-label="Rotate right">
-                <ToolIcon name="redo" className="h-4 w-4" />
-                Rotate Right
-              </button>
-            </div>
-
-            <label className="flex items-center gap-2 text-sm text-base-content/80">
-              <input
-                type="checkbox"
-                checked={applyToAll}
-                onChange={(event) => {
-                  setApplyToAll(event.target.checked);
-                  resetOutput();
-                }}
-                className="checkbox checkbox-sm"
-              />
-              Apply to all {totalPages} pages
-            </label>
-
-            {!applyToAll && (
-              <input
-                type="text"
-                value={pagesInput}
-                onChange={(event) => {
-                  setPagesInput(event.target.value);
-                  resetOutput();
-                }}
-                placeholder={`e.g. 1-3, 5, 8-${totalPages}`}
-                className="input input-bordered input-sm w-56"
-              />
             )}
           </div>
-        </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+            {thumbnails.map((thumb, index) => (
+              <div
+                key={index}
+                className="flex flex-col items-center gap-2 rounded-lg border border-base-300 bg-base-200 p-2"
+              >
+                <div className="flex h-36 w-36 items-center justify-center overflow-hidden">
+                  <img
+                    src={thumb}
+                    alt={`Page ${index + 1}`}
+                    className="max-h-full max-w-full object-contain shadow-sm transition-transform"
+                    style={{ transform: `rotate(${rotations[index]}deg)` }}
+                  />
+                </div>
+                <span className="text-xs text-base-content/60">
+                  Page {index + 1}
+                  {rotations[index] !== 0 && <span className="ml-1 text-primary">({rotations[index]}°)</span>}
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => turnPage(index, -1)}
+                    className="btn btn-ghost btn-xs btn-square"
+                    aria-label={`Rotate page ${index + 1} left`}
+                    title="Rotate left"
+                  >
+                    <ToolIcon name="undo" className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => turnPage(index, 1)}
+                    className="btn btn-ghost btn-xs btn-square"
+                    aria-label={`Rotate page ${index + 1} right`}
+                    title="Rotate right"
+                  >
+                    <ToolIcon name="redo" className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {errorMessage && (
@@ -220,16 +249,16 @@ export function RotatePdfWorkspace() {
           <button
             type="button"
             onClick={handleRotate}
-            disabled={!totalPages || rotation === 0 || status === "rotating"}
+            disabled={thumbnails.length === 0 || !hasAnyRotation || status === "rotating"}
             className="btn btn-primary w-full"
           >
             {status === "rotating" ? "Rotating..." : "Rotate PDF"}
           </button>
         )}
       </div>
-      {rotation === 0 && totalPages && (
+      {thumbnails.length > 0 && !hasAnyRotation && (
         <p className="mt-2 text-center text-xs text-base-content/50">
-          Rotate left or right to set an angle first.
+          Rotate a page (or use Rotate All) to set an angle first.
         </p>
       )}
     </div>
