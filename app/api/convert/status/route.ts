@@ -34,7 +34,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ status: "error", error: "No output file was produced." });
     }
 
-    return NextResponse.json({ status: "finished", downloadUrl: file.url, filename: file.filename });
+    return NextResponse.json({
+      status: "finished",
+      downloadUrl: file.url,
+      filename: file.filename,
+      sizeBytes: file.size ?? null,
+    });
   } catch (error) {
     return NextResponse.json(
       { status: "error", error: error instanceof Error ? error.message : "Couldn't check job status." },

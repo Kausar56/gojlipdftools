@@ -9,5 +9,5 @@ const tool = getToolBySlug("watermark-pdf")!;
 export const metadata: Metadata = toolMetadata(tool);
 
 export default function WatermarkPdfPage() {
-  return <ToolPageLayout tool={tool} workspace={<WatermarkPdfWorkspace />} />;
+  return <ToolPageLayout tool={tool} maxWidthClassName="max-w-7xl" workspace={<WatermarkPdfWorkspace />} />;
 }

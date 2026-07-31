@@ -4,19 +4,26 @@ import { createClient } from "@/lib/supabase/server";
 import { getPlanLimits, getUserPlan, getMonthlyUsageCount, recordUsage } from "@/lib/usageLimits";
 
 export async function POST(request: Request) {
+  let mode: "convert" | "optimize";
   let inputFormat: string;
   let outputFormat: string;
+  let profile: string;
   let filename: string;
   let fileSizeBytes: number;
 
   try {
     const body = await request.json();
+    mode = body.mode === "optimize" ? "optimize" : "convert";
     inputFormat = String(body.inputFormat ?? "");
     outputFormat = String(body.outputFormat ?? "");
+    profile = String(body.profile ?? "web");
     filename = String(body.filename ?? "file");
     fileSizeBytes = Number(body.fileSizeBytes ?? 0);
-    if (!inputFormat || !outputFormat) {
-      return NextResponse.json({ error: "Missing inputFormat/outputFormat." }, { status: 400 });
+    if (!inputFormat) {
+      return NextResponse.json({ error: "Missing inputFormat." }, { status: 400 });
+    }
+    if (mode === "convert" && !outputFormat) {
+      return NextResponse.json({ error: "Missing outputFormat." }, { status: 400 });
     }
   } catch {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
@@ -74,21 +81,31 @@ export async function POST(request: Request) {
     const cloudConvert = getCloudConvert();
 
     const baseName = filename.replace(/\.[^./\\]+$/, "");
-    const outputFilename = `${baseName}.${outputFormat}`;
+    const processTask =
+      mode === "optimize"
+        ? {
+            operation: "optimize" as const,
+            input: "import-file",
+            // Compression is PDF-only for now — the "optimize" task's input_format
+            // union is narrower (jpg/png/pdf) than convert's plain string.
+            input_format: "pdf" as const,
+            profile: profile as "web" | "print" | "archive" | "mrc" | "max",
+          }
+        : {
+            operation: "convert" as const,
+            input: "import-file",
+            input_format: inputFormat,
+            output_format: outputFormat,
+            filename: `${baseName}.${outputFormat}`,
+          };
 
     const job = await cloudConvert.jobs.create({
       tasks: {
         "import-file": { operation: "import/upload" },
-        "convert-file": {
-          operation: "convert",
-          input: "import-file",
-          input_format: inputFormat,
-          output_format: outputFormat,
-          filename: outputFilename,
-        },
+        "process-file": processTask,
         "export-file": {
           operation: "export/url",
-          input: "convert-file",
+          input: "process-file",
         },
       },
     });
@@ -100,7 +117,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Couldn't start the conversion job." }, { status: 502 });
     }
 
-    await recordUsage(supabase, userId, `${inputFormat}-to-${outputFormat}`, fileSizeBytes);
+    const usageSlug = mode === "optimize" ? `${inputFormat}-optimize` : `${inputFormat}-to-${outputFormat}`;
+    await recordUsage(supabase, userId, usageSlug, fileSizeBytes);
 
     return NextResponse.json({
       jobId: job.id,

@@ -51,14 +51,14 @@ type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 // dragging (see startElementResize), so resizing from any corner or edge
 // feels natural instead of the box always re-anchoring at its top-left.
 const RESIZE_HANDLES: { dir: ResizeHandle; position: string; cursor: string }[] = [
-  { dir: "nw", position: "-top-1.5 -left-1.5", cursor: "cursor-nwse-resize" },
-  { dir: "n", position: "-top-1.5 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
-  { dir: "ne", position: "-top-1.5 -right-1.5", cursor: "cursor-nesw-resize" },
-  { dir: "e", position: "top-1/2 -right-1.5 -translate-y-1/2", cursor: "cursor-ew-resize" },
-  { dir: "se", position: "-bottom-1.5 -right-1.5", cursor: "cursor-nwse-resize" },
-  { dir: "s", position: "-bottom-1.5 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
-  { dir: "sw", position: "-bottom-1.5 -left-1.5", cursor: "cursor-nesw-resize" },
-  { dir: "w", position: "top-1/2 -left-1.5 -translate-y-1/2", cursor: "cursor-ew-resize" },
+  { dir: "nw", position: "-top-2 -left-2", cursor: "cursor-nwse-resize" },
+  { dir: "n", position: "-top-2 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
+  { dir: "ne", position: "-top-2 -right-2", cursor: "cursor-nesw-resize" },
+  { dir: "e", position: "top-1/2 -right-2 -translate-y-1/2", cursor: "cursor-ew-resize" },
+  { dir: "se", position: "-bottom-2 -right-2", cursor: "cursor-nwse-resize" },
+  { dir: "s", position: "-bottom-2 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
+  { dir: "sw", position: "-bottom-2 -left-2", cursor: "cursor-nesw-resize" },
+  { dir: "w", position: "top-1/2 -left-2 -translate-y-1/2", cursor: "cursor-ew-resize" },
 ];
 
 const shapeTypes: { id: ShapeType; icon: string; label: string }[] = [
@@ -262,6 +262,9 @@ export function PdfEditorWorkspace() {
   const [activeColorHex, setActiveColorHex] = useState<string>("#000000");
   const [activeFontSizePt, setActiveFontSizePt] = useState(16);
   const [activePenStrokeWidthPt, setActivePenStrokeWidthPt] = useState(2);
+  // The pen color/thickness submenu normally opens on :hover, which never
+  // fires on touch — this lets a tap on its toggle open it too.
+  const [penSubmenuOpen, setPenSubmenuOpen] = useState(false);
   const [shapeType, setShapeType] = useState<ShapeType>("rectangle");
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [drawingPath, setDrawingPath] = useState<Point[] | null>(null);
@@ -417,7 +420,7 @@ export function PdfEditorWorkspace() {
     setCurrentPage(0);
   }
 
-  function toPagePoint(event: React.MouseEvent): Point {
+  function toPagePoint(event: { clientX: number; clientY: number }): Point {
     const rect = overlayRef.current!.getBoundingClientRect();
     return {
       x: (event.clientX - rect.left) / scale,
@@ -608,7 +611,7 @@ export function PdfEditorWorkspace() {
     findAllMatches().forEach(replaceMatch);
   }
 
-  function startPan(event: React.MouseEvent) {
+  function startPan(event: React.PointerEvent) {
     const container = scrollContainerRef.current;
     if (!container) return;
     const startX = event.clientX;
@@ -617,20 +620,20 @@ export function PdfEditorWorkspace() {
     const startScrollTop = container.scrollTop;
     setIsPanning(true);
 
-    function onMove(moveEvent: MouseEvent) {
+    function onMove(moveEvent: PointerEvent) {
       scrollContainerRef.current!.scrollLeft = startScrollLeft - (moveEvent.clientX - startX);
       scrollContainerRef.current!.scrollTop = startScrollTop - (moveEvent.clientY - startY);
     }
     function onUp() {
       setIsPanning(false);
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function handleOverlayMouseDown(event: React.MouseEvent) {
+  function handleOverlayPointerDown(event: React.PointerEvent) {
     if (event.target !== event.currentTarget) return;
     setSelectedElementId(null);
 
@@ -793,7 +796,7 @@ export function PdfEditorWorkspace() {
     }
   }
 
-  function handleOverlayMouseMove(event: React.MouseEvent) {
+  function handleOverlayPointerMove(event: React.PointerEvent) {
     if (activeTool === "draw" && drawingPath) {
       setDrawingPath((prev) => (prev ? [...prev, toPagePoint(event)] : prev));
     } else if (activeTool === "shapes" && shapeType === "line" && lineDraft) {
@@ -801,7 +804,7 @@ export function PdfEditorWorkspace() {
     }
   }
 
-  function handleOverlayMouseUp() {
+  function handleOverlayPointerUp() {
     if (activeTool === "draw" && drawingPath && drawingPath.length > 1) {
       addElement({
         id: createElementId(),
@@ -834,7 +837,7 @@ export function PdfEditorWorkspace() {
     setLineDraft(null);
   }
 
-  function startElementDrag(el: EditorElement, event: React.MouseEvent) {
+  function startElementDrag(el: EditorElement, event: React.PointerEvent) {
     event.stopPropagation();
     if (activeTool === "erase") {
       removeElement(el.id);
@@ -849,20 +852,20 @@ export function PdfEditorWorkspace() {
     const startXPt = el.xPt;
     const startYPt = el.yPt;
 
-    function onMove(moveEvent: MouseEvent) {
+    function onMove(moveEvent: PointerEvent) {
       const dxPt = (moveEvent.clientX - startX) / scale;
       const dyPt = (moveEvent.clientY - startY) / scale;
       updateElement(el.id, { xPt: startXPt + dxPt, yPt: startYPt + dyPt });
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
-  function startLineDrag(el: Extract<EditorElement, { type: "line" }>, event: React.MouseEvent) {
+  function startLineDrag(el: Extract<EditorElement, { type: "line" }>, event: React.PointerEvent) {
     event.stopPropagation();
     setSelectedElementId(el.id);
     if (activeTool === "erase") {
@@ -876,17 +879,17 @@ export function PdfEditorWorkspace() {
     const startY = event.clientY;
     const { x1Pt, y1Pt, x2Pt, y2Pt } = el;
 
-    function onMove(moveEvent: MouseEvent) {
+    function onMove(moveEvent: PointerEvent) {
       const dxPt = (moveEvent.clientX - startX) / scale;
       const dyPt = (moveEvent.clientY - startY) / scale;
       updateElement(el.id, { x1Pt: x1Pt + dxPt, y1Pt: y1Pt + dyPt, x2Pt: x2Pt + dxPt, y2Pt: y2Pt + dyPt });
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
   // Handle defaults to "se" (bottom-right, growing away from the fixed
@@ -896,7 +899,7 @@ export function PdfEditorWorkspace() {
   // handle keeps the right edge fixed and moves xPt), which is what makes
   // resizing from any corner or edge feel natural instead of the box always
   // jumping to re-anchor at its top-left.
-  function startElementResize(el: EditorElement, event: React.MouseEvent, handle: ResizeHandle = "se") {
+  function startElementResize(el: EditorElement, event: React.PointerEvent, handle: ResizeHandle = "se") {
     event.stopPropagation();
     if (el.type === "path" || el.type === "text-edit" || el.type === "line") return;
 
@@ -911,7 +914,7 @@ export function PdfEditorWorkspace() {
     const startHeight = !isText ? el.heightPt : 0;
     const startFontSize = isText ? el.fontSizePt : 0;
 
-    function onMove(moveEvent: MouseEvent) {
+    function onMove(moveEvent: PointerEvent) {
       const dxPt = (moveEvent.clientX - startX) / scale;
       const dyPt = (moveEvent.clientY - startY) / scale;
 
@@ -947,11 +950,11 @@ export function PdfEditorWorkspace() {
       updateElement(el.id, patch as Partial<EditorElement>);
     }
     function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
     }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   }
 
   function handleToolClick(toolId: ToolId) {
@@ -1632,26 +1635,43 @@ export function PdfEditorWorkspace() {
             <ul>
               {annotateTypes.map((annotateTool) => (
                 <li key={annotateTool.id} className={annotateTool.id === "draw" ? "group relative" : undefined}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleToolClick(annotateTool.id);
-                      close();
-                    }}
-                    className={activeTool === annotateTool.id ? "active" : ""}
-                  >
-                    <ToolIcon name={annotateTool.icon} className="h-4 w-4" />
-                    {annotateTool.label}
-                  </button>
+                  <div className={annotateTool.id === "draw" ? "flex items-center" : undefined}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleToolClick(annotateTool.id);
+                        close();
+                      }}
+                      className={`flex-1 ${activeTool === annotateTool.id ? "active" : ""}`}
+                    >
+                      <ToolIcon name={annotateTool.icon} className="h-4 w-4" />
+                      {annotateTool.label}
+                    </button>
+                    {/* :hover never fires on touch, so the submenu below also needs an
+                        explicit tap target to open it — this button is that target. */}
+                    {annotateTool.id === "draw" && (
+                      <button
+                        type="button"
+                        onClick={() => setPenSubmenuOpen((current) => !current)}
+                        className="btn btn-ghost btn-xs btn-square"
+                        aria-label="Pen color and thickness"
+                        title="Pen color and thickness"
+                      >
+                        <ToolIcon name="chevron-down" className="h-3 w-3 -rotate-90" />
+                      </button>
+                    )}
+                  </div>
 
                   {/* Pen gets its own color/thickness submenu instead of the plain
                       toolbar swatch row other color-tools use — hovering the "Pen"
-                      row reveals it, matching how a submenu normally works, rather
-                      than showing settings somewhere else in the persistent toolbar. */}
+                      row reveals it on a mouse, and the toggle button above opens
+                      it on touch, where :hover never fires. */}
                   {annotateTool.id === "draw" && (
                     <div
-                      onMouseDown={(event) => event.stopPropagation()}
-                      className="absolute top-0 left-full z-40 ml-1 hidden w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg group-hover:block"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      className={`absolute top-0 left-full z-40 ml-1 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg ${
+                        penSubmenuOpen ? "block" : "hidden group-hover:block"
+                      }`}
                     >
                       <p className="mb-1.5 px-1 text-[10px] tracking-wide text-base-content/50 uppercase">Thickness</p>
                       <div className="mb-2 flex items-center gap-1 px-1">
@@ -1687,6 +1707,7 @@ export function PdfEditorWorkspace() {
                             onClick={() => {
                               setActiveColorHex(resolveSwatchHex(swatch.id));
                               handleToolClick("draw");
+                              setPenSubmenuOpen(false);
                               close();
                             }}
                             aria-label={`Use ${swatch.id} color`}
@@ -1981,7 +2002,7 @@ export function PdfEditorWorkspace() {
 
       <div
         ref={scrollContainerRef}
-        className="overflow-x-auto rounded-b-2xl bg-base-200 p-6"
+        className="overflow-x-auto rounded-b-2xl bg-base-200 p-3 sm:p-6"
         // No fixed/viewport-relative height here on purpose: the container just
         // grows to fit the rendered page (which is already scaled to the
         // available width), so viewing a page never needs its own separate
@@ -2024,8 +2045,8 @@ export function PdfEditorWorkspace() {
                           strokeWidth={16}
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          style={{ pointerEvents: "stroke", cursor: "not-allowed" }}
-                          onMouseDown={(event) => {
+                          style={{ pointerEvents: "stroke", cursor: "not-allowed", touchAction: "none" }}
+                          onPointerDown={(event) => {
                             event.stopPropagation();
                             removeElement(el.id);
                           }}
@@ -2065,8 +2086,12 @@ export function PdfEditorWorkspace() {
                           stroke="transparent"
                           strokeWidth={16}
                           strokeLinecap="round"
-                          style={{ pointerEvents: "stroke", cursor: activeTool === "erase" ? "not-allowed" : "move" }}
-                          onMouseDown={(event) => startLineDrag(el, event)}
+                          style={{
+                            pointerEvents: "stroke",
+                            cursor: activeTool === "erase" ? "not-allowed" : "move",
+                            touchAction: "none",
+                          }}
+                          onPointerDown={(event) => startLineDrag(el, event)}
                         />
                       )}
                     </g>
@@ -2094,10 +2119,14 @@ export function PdfEditorWorkspace() {
                   // always wins the hit-test first. Element wrappers below opt back in
                   // with pointerEvents: "auto" so they stay erasable too.
                   pointerEvents: activeTool === "erase" ? "none" : undefined,
+                  // Without this, a touch-drag here (panning, drawing, dragging an
+                  // element) also triggers the browser's own scroll/zoom gesture,
+                  // fighting the manual scrollLeft/scrollTop and point tracking below.
+                  touchAction: "none",
                 }}
-                onMouseDown={handleOverlayMouseDown}
-                onMouseMove={handleOverlayMouseMove}
-                onMouseUp={handleOverlayMouseUp}
+                onPointerDown={handleOverlayPointerDown}
+                onPointerMove={handleOverlayPointerMove}
+                onPointerUp={handleOverlayPointerUp}
               >
                 {pageElements
                   .filter((el) => el.type === "text-edit")
@@ -2170,7 +2199,7 @@ export function PdfEditorWorkspace() {
                           pushHistory();
                           setSelectedElementId(el.id);
                         }}
-                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
                         wrap="off"
                         // Text-edit replacements stay on one line at a fixed position, matching
                         // the original. Wrapping would push overflow onto a second line and,
@@ -2210,7 +2239,7 @@ export function PdfEditorWorkspace() {
                   .map((el) => (
                     <div
                       key={el.id}
-                      onMouseDown={(event) => {
+                      onPointerDown={(event) => {
                         setSelectedElementId(el.id);
                         startElementDrag(el, event);
                       }}
@@ -2222,6 +2251,7 @@ export function PdfEditorWorkspace() {
                         height: el.type === "text" ? undefined : el.heightPt * scale,
                         cursor: activeTool === "erase" ? "not-allowed" : "move",
                         pointerEvents: "auto",
+                        touchAction: "none",
                       }}
                     >
                       <button
@@ -2244,7 +2274,7 @@ export function PdfEditorWorkspace() {
                             pushHistory();
                             setSelectedElementId(el.id);
                           }}
-                          onMouseDown={(event) => {
+                          onPointerDown={(event) => {
                             // A plain click should still land the caret for typing, but
                             // pressing and dragging (anywhere on the box, not just its
                             // edge) should move it — matching how Canva/Slides-style
@@ -2256,22 +2286,22 @@ export function PdfEditorWorkspace() {
                             const startY = event.clientY;
                             let dragging = false;
 
-                            function onMove(moveEvent: MouseEvent) {
+                            function onMove(moveEvent: PointerEvent) {
                               if (dragging) return;
                               if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 4) {
                                 dragging = true;
-                                window.removeEventListener("mousemove", onMove);
-                                window.removeEventListener("mouseup", onUp);
+                                window.removeEventListener("pointermove", onMove);
+                                window.removeEventListener("pointerup", onUp);
                                 textarea.blur();
                                 startElementDrag(el, event);
                               }
                             }
                             function onUp() {
-                              window.removeEventListener("mousemove", onMove);
-                              window.removeEventListener("mouseup", onUp);
+                              window.removeEventListener("pointermove", onMove);
+                              window.removeEventListener("pointerup", onUp);
                             }
-                            window.addEventListener("mousemove", onMove);
-                            window.addEventListener("mouseup", onUp);
+                            window.addEventListener("pointermove", onMove);
+                            window.addEventListener("pointerup", onUp);
                           }}
                           className="w-full cursor-move resize-none border border-dashed border-transparent bg-transparent leading-tight outline-none hover:border-base-content/20 focus:cursor-text"
                           style={{
@@ -2286,6 +2316,7 @@ export function PdfEditorWorkspace() {
                                 : el.fontFamily === "monospace"
                                   ? "'Courier New', monospace"
                                   : "Helvetica, Arial, sans-serif",
+                            touchAction: "none",
                           }}
                         />
                       )}
@@ -2335,7 +2366,7 @@ export function PdfEditorWorkspace() {
                             value={el.url}
                             onChange={(event) => updateElement(el.id, { url: event.target.value })}
                             onFocus={pushHistory}
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             placeholder="https://..."
                             className="min-w-0 flex-1 border-none bg-transparent text-xs text-info outline-none placeholder:text-info/50"
                           />
@@ -2349,7 +2380,7 @@ export function PdfEditorWorkspace() {
                             value={el.defaultValue}
                             onChange={(event) => updateElement(el.id, { defaultValue: event.target.value })}
                             onFocus={pushHistory}
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Text field"
                             className="min-w-0 flex-1 border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
                           />
@@ -2362,7 +2393,7 @@ export function PdfEditorWorkspace() {
                             value={el.defaultValue}
                             onChange={(event) => updateElement(el.id, { defaultValue: event.target.value })}
                             onFocus={pushHistory}
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Text multiline"
                             className="h-full w-full resize-none border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
                           />
@@ -2377,7 +2408,7 @@ export function PdfEditorWorkspace() {
                             value={el.optionsCsv}
                             onChange={(event) => updateElement(el.id, { optionsCsv: event.target.value })}
                             onFocus={pushHistory}
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Option 1, Option 2"
                             title="Comma-separated dropdown options"
                             className="min-w-0 flex-1 border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
@@ -2393,7 +2424,7 @@ export function PdfEditorWorkspace() {
                             value={el.groupName}
                             onChange={(event) => updateElement(el.id, { groupName: event.target.value })}
                             onFocus={pushHistory}
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Group"
                             title="Radio buttons sharing this group name become one choice"
                             className="w-14 min-w-0 border-none border-r border-secondary/30 bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
@@ -2403,7 +2434,7 @@ export function PdfEditorWorkspace() {
                             value={el.optionLabel}
                             onChange={(event) => updateElement(el.id, { optionLabel: event.target.value })}
                             onFocus={pushHistory}
-                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Option"
                             className="min-w-0 flex-1 border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
                           />
@@ -2427,17 +2458,23 @@ export function PdfEditorWorkspace() {
 
                       {el.type === "text" ? (
                         <div
-                          onMouseDown={(event) => startElementResize(el, event)}
+                          onPointerDown={(event) => startElementResize(el, event)}
                           title="Drag to resize text"
-                          className="absolute -bottom-1.5 -right-1.5 z-10 hidden h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-primary group-hover:block"
+                          style={{ touchAction: "none" }}
+                          className={`absolute -bottom-2 -right-2 z-10 h-4 w-4 cursor-nwse-resize rounded-sm border border-white bg-primary ${
+                            el.id === selectedElementId ? "block" : "hidden group-hover:block"
+                          }`}
                         />
                       ) : (
                         RESIZE_HANDLES.map((h) => (
                           <div
                             key={h.dir}
-                            onMouseDown={(event) => startElementResize(el, event, h.dir)}
+                            onPointerDown={(event) => startElementResize(el, event, h.dir)}
                             title="Drag to resize"
-                            className={`absolute z-10 hidden h-3 w-3 rounded-sm border border-white bg-primary group-hover:block ${h.position} ${h.cursor}`}
+                            style={{ touchAction: "none" }}
+                            className={`absolute z-10 h-4 w-4 rounded-sm border border-white bg-primary ${h.position} ${h.cursor} ${
+                              el.id === selectedElementId ? "block" : "hidden group-hover:block"
+                            }`}
                           />
                         ))
                       )}

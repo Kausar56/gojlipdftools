@@ -9,9 +9,10 @@ export type PlanLimits = {
 
 /**
  * Single source of truth for free/paid limits on the tools that upload to a real
- * server (currently: pdf-to-word, word-to-pdf, excel-to-pdf, ppt-to-pdf via CloudConvert —
- * see docs/TOOLS_STATUS.md). Purely browser-side tools (merge, split, compress, etc.)
- * cost us nothing per use and are intentionally NOT gated here.
+ * server (pdf-to-word, word-to-pdf, excel-to-pdf, ppt-to-pdf, and Compress PDF's
+ * "Advanced" mode — all via CloudConvert, see docs/TOOLS_STATUS.md). Purely
+ * browser-side tools (merge, split, compress's own "Standard" mode, etc.) cost
+ * us nothing per use and are intentionally NOT gated here.
  *
  * Change numbers here — no other code needs to change. A future admin panel (or a
  * Stripe webhook) only ever needs to update `profiles.plan` per user; these tiers stay

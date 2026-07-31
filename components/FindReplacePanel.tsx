@@ -37,7 +37,7 @@ export function FindReplacePanel({
     // than in its own internal scroll container, so a fixed position is what
     // keeps the panel on screen and clear of the pinned toolbar as the user
     // scrolls, instead of anchoring to some arbitrary ancestor.
-    <div className="fixed top-20 right-4 z-50 w-80 rounded-xl border border-base-300 bg-base-100 shadow-xl">
+    <div className="fixed top-20 right-4 left-4 z-50 w-auto max-w-80 rounded-xl border border-base-300 bg-base-100 shadow-xl sm:left-auto sm:w-80">
       <div className="flex items-center justify-between border-b border-base-300 px-3 py-2">
         <span className="flex items-center gap-1.5 text-sm font-semibold text-base-content">
           <ToolIcon name="search" className="h-4 w-4" />

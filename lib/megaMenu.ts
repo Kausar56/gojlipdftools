@@ -28,9 +28,9 @@ export const megaMenu: MegaMenuCategory[] = [
       // Both are just Split PDF used a specific way (one range group, or the
       // built-in "Split in Half" shortcut already in that tool) — pointing
       // them at the same slug instead of building near-duplicate tools.
-      { label: "Extract Pages", slug: "split-pdf" },
+      { label: "Extract Pages", slug: "split-pdf", description: "Pull out specific pages into their own new PDF." },
       { label: "Split by Bookmarks", description: "Break a PDF into files using its bookmark structure." },
-      { label: "Split in Half", slug: "split-pdf" },
+      { label: "Split in Half", slug: "split-pdf", description: "Divide a PDF into two equal halves in one click." },
       { label: "Split by Size", description: "Split a PDF into parts under a target file size." },
       { label: "Split by Text", description: "Split a PDF wherever matching text appears." },
     ],
@@ -80,9 +80,7 @@ export const megaMenu: MegaMenuCategory[] = [
   {
     title: "Other",
     items: [
-      // Same tool, flexible enough to cover both a plain page number and a
-      // Bates-style prefix + zero-padded sequence.
-      { label: "Bates Numbering", slug: "page-numbers" },
+      { label: "Bates Numbering", slug: "bates-numbering" },
       { label: "Create Bookmarks", description: "Add a navigable outline to a PDF." },
       { label: "Crop", description: "Trim the margins or visible area of PDF pages." },
       { label: "Edit Metadata", slug: "edit-metadata" },

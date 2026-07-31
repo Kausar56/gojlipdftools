@@ -8,7 +8,7 @@ const accentClasses: Record<Tool["accent"], string> = {
   accent: "bg-accent/10 text-accent group-hover:bg-accent group-hover:text-accent-content",
 };
 
-export function ToolCard({ tool, label }: { tool: Tool; label?: string }) {
+export function ToolCard({ tool, label, description }: { tool: Tool; label?: string; description?: string }) {
   return (
     <Link
       href={`/${tool.slug}`}
@@ -29,7 +29,7 @@ export function ToolCard({ tool, label }: { tool: Tool; label?: string }) {
           every such item would show the same underlying tool's name, making
           the grid look like it has duplicate cards. */}
       <h3 className="mt-3 text-base font-semibold text-base-content">{label ?? tool.name}</h3>
-      <p className="mt-1 text-sm text-base-content/70">{tool.shortDescription}</p>
+      <p className="mt-1 text-sm text-base-content/70">{description ?? tool.shortDescription}</p>
     </Link>
   );
 }

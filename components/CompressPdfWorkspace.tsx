@@ -2,37 +2,57 @@
 
 import { useRef, useState } from "react";
 import type { PDFRef } from "pdf-lib";
+import Link from "next/link";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { formatBytes } from "@/lib/format";
 import { describeError } from "@/lib/errorHelpers";
+import { ConvertError, optimizePdfViaCloudConvert, type OptimizeProfile } from "@/lib/convertClient";
 
 type Level = "low" | "recommended" | "extreme";
+type Mode = "standard" | "advanced";
 type Status = "idle" | "compressing" | "done" | "error";
 
-const levels: { id: Level; label: string; description: string; quality: number; targetDpi: number | null }[] = [
-  { id: "low", label: "Low compression", description: "Best quality", quality: 0.8, targetDpi: null },
-  { id: "recommended", label: "Recommended", description: "Good balance", quality: 0.6, targetDpi: 150 },
-  { id: "extreme", label: "Extreme compression", description: "Smallest file", quality: 0.4, targetDpi: 100 },
+const levels: {
+  id: Level;
+  label: string;
+  description: string;
+  quality: number;
+  targetDpi: number | null;
+  profile: OptimizeProfile;
+}[] = [
+  { id: "low", label: "Low compression", description: "Best quality", quality: 0.8, targetDpi: null, profile: "print" },
+  { id: "recommended", label: "Recommended", description: "Good balance", quality: 0.6, targetDpi: 150, profile: "web" },
+  { id: "extreme", label: "Extreme compression", description: "Smallest file", quality: 0.4, targetDpi: 100, profile: "max" },
 ];
 
 export function CompressPdfWorkspace() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [level, setLevel] = useState<Level>("recommended");
+  // Standard runs entirely in the browser (free, private, image-recompression
+  // only). Advanced sends the file to CloudConvert for a real Ghostscript-
+  // level optimization pass — costs a conversion credit, so it requires login.
+  const [mode, setMode] = useState<Mode>("standard");
   const [status, setStatus] = useState<Status>("idle");
+  const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloadFilename, setDownloadFilename] = useState("compressed.pdf");
   const [resultSize, setResultSize] = useState<number | null>(null);
   const [lowSavings, setLowSavings] = useState(false);
 
   function resetOutput() {
-    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    if (downloadUrl && downloadUrl.startsWith("blob:")) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
+    setDownloadFilename("compressed.pdf");
     setResultSize(null);
     setLowSavings(false);
     setStatus("idle");
+    setStatusMessage("");
     setErrorMessage("");
+    setErrorCode(undefined);
   }
 
   function loadFile(selected: File) {
@@ -44,6 +64,26 @@ export function CompressPdfWorkspace() {
     if (!file) return;
     setStatus("compressing");
     setErrorMessage("");
+    setErrorCode(undefined);
+
+    if (mode === "advanced") {
+      try {
+        const { profile } = levels.find((item) => item.id === level)!;
+        const result = await optimizePdfViaCloudConvert(file, profile, setStatusMessage);
+        setDownloadUrl(result.downloadUrl);
+        setDownloadFilename(result.filename);
+        if (result.sizeBytes !== null) {
+          setResultSize(result.sizeBytes);
+          setLowSavings(result.sizeBytes > file.size * 0.95);
+        }
+        setStatus("done");
+      } catch (error) {
+        setStatus("error");
+        setErrorMessage(describeError(error, error instanceof Error ? error.message : "Couldn't compress this PDF."));
+        setErrorCode(error instanceof ConvertError ? error.code : undefined);
+      }
+      return;
+    }
 
     try {
       const { PDFDocument, PDFName, PDFDict, PDFRawStream, PDFRef } = await import("pdf-lib");
@@ -201,6 +241,49 @@ export function CompressPdfWorkspace() {
         </button>
       </div>
 
+      <div className="mt-5 flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("standard");
+            resetOutput();
+          }}
+          className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+            mode === "standard"
+              ? "border-primary bg-primary/5 text-base-content"
+              : "border-base-300 text-base-content/70 hover:border-primary/40"
+          }`}
+        >
+          <span className="block font-medium">Standard</span>
+          <span className="block text-xs text-base-content/50">Free, runs in your browser</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode("advanced");
+            resetOutput();
+          }}
+          className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+            mode === "advanced"
+              ? "border-primary bg-primary/5 text-base-content"
+              : "border-base-300 text-base-content/70 hover:border-primary/40"
+          }`}
+        >
+          <span className="block font-medium">Advanced</span>
+          <span className="block text-xs text-base-content/50">Stronger compression, requires login</span>
+        </button>
+      </div>
+
+      {mode === "advanced" && (
+        <p className="mt-3 text-xs text-base-content/50">
+          Uses{" "}
+          <a href="https://cloudconvert.com" target="_blank" rel="noopener noreferrer" className="underline">
+            CloudConvert
+          </a>{" "}
+          — your file is uploaded to their servers for this compression, then removed.
+        </p>
+      )}
+
       <div className="mt-5 grid gap-2 sm:grid-cols-3">
         {levels.map((item) => (
           <button
@@ -241,15 +324,34 @@ export function CompressPdfWorkspace() {
       )}
 
       {errorMessage && (
-        <p className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>
+        <div className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">
+          <p>{errorMessage}</p>
+          {errorCode === "AUTH_REQUIRED" && (
+            <Link href="/login" className="mt-1 inline-block font-medium underline">
+              Log in
+            </Link>
+          )}
+          {(errorCode === "QUOTA_EXCEEDED" || errorCode === "FILE_TOO_LARGE") && (
+            <Link href="/pricing" className="mt-1 inline-block font-medium underline">
+              View plans
+            </Link>
+          )}
+        </div>
       )}
 
       <div className="mt-5">
         {status === "done" && downloadUrl ? (
-          <a href={downloadUrl} download="compressed.pdf" className="btn btn-primary w-full">
-            <ToolIcon name="download" className="h-4 w-4" />
-            Download Compressed PDF
-          </a>
+          mode === "advanced" ? (
+            <a href={downloadUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary w-full">
+              <ToolIcon name="download" className="h-4 w-4" />
+              Download {downloadFilename}
+            </a>
+          ) : (
+            <a href={downloadUrl} download={downloadFilename} className="btn btn-primary w-full">
+              <ToolIcon name="download" className="h-4 w-4" />
+              Download Compressed PDF
+            </a>
+          )
         ) : (
           <button
             type="button"
@@ -257,7 +359,7 @@ export function CompressPdfWorkspace() {
             disabled={status === "compressing"}
             className="btn btn-primary w-full"
           >
-            {status === "compressing" ? "Compressing..." : "Compress PDF"}
+            {status === "compressing" ? statusMessage || "Compressing..." : "Compress PDF"}
           </button>
         )}
       </div>

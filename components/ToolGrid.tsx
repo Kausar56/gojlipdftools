@@ -66,7 +66,11 @@ export function ToolGrid({ tools }: { tools: Tool[] }) {
               return (
                 <Reveal key={item.label} delayMs={Math.min(index, 7) * 60}>
                   {tool ? (
-                    <ToolCard tool={tool} label={item.label === tool.name ? undefined : item.label} />
+                    <ToolCard
+                      tool={tool}
+                      label={item.label === tool.name ? undefined : item.label}
+                      description={item.description}
+                    />
                   ) : (
                     <DisabledToolCard label={item.label} description={item.description} />
                   )}

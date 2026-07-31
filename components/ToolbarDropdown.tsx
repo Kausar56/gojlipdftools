@@ -37,24 +37,39 @@ export function ToolbarDropdown({
     }
     reposition();
 
-    function onPointerDown(event: MouseEvent) {
+    function onOutsidePointerDown(event: PointerEvent) {
       const target = event.target as Node;
       if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) {
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", onPointerDown);
+    // pointerdown (not mousedown) so a tap outside the menu closes it just as
+    // reliably on touch as a click does with a mouse.
+    document.addEventListener("pointerdown", onOutsidePointerDown);
     // Keep the menu glued to its trigger if the scrollable toolbar row moves
     // while the menu is open (capture:true catches scroll on the row itself,
     // which doesn't bubble like most events).
     window.addEventListener("scroll", reposition, true);
     window.addEventListener("resize", reposition);
     return () => {
-      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("pointerdown", onOutsidePointerDown);
       window.removeEventListener("scroll", reposition, true);
       window.removeEventListener("resize", reposition);
     };
   }, [open]);
+
+  // The trigger's own left edge can push a wide menu past the right edge of
+  // a narrow phone screen — nudge it back on-screen once its real rendered
+  // width is measurable (unknown up front since menuClassName varies).
+  useEffect(() => {
+    if (!open || !pos) return;
+    const menu = menuRef.current;
+    if (!menu) return;
+    const overflowRight = menu.getBoundingClientRect().right - (window.innerWidth - 8);
+    if (overflowRight > 0) {
+      setPos((current) => (current ? { ...current, left: Math.max(8, current.left - overflowRight) } : current));
+    }
+  }, [open, pos]);
 
   return (
     <>

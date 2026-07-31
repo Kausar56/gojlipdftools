@@ -651,18 +651,18 @@ export const tools: Tool[] = [
     slug: "page-numbers",
     name: "Page Numbers",
     shortDescription: "Stamp page numbers onto every page.",
-    heroDescription: "Stamp page numbers onto every page, including Bates-style legal numbering.",
+    heroDescription: "Stamp page numbers onto every page, in any format and position you choose.",
     accent: "primary",
     category: "core",
     icon: "text-multiline",
     accept: "application/pdf",
     guideIntro:
-      "From simple page counters to Bates-style legal numbering, Gojli's Page Numbers tool stamps a consistent number onto every page, with control over position, starting number, and an optional prefix.",
+      "Gojli's Page Numbers tool stamps a consistent number onto every page, with control over the format, starting number, and exactly where it appears on the page.",
     guideSteps: [
       { title: "Upload your PDF", description: "Choose the PDF file you want to number." },
       {
         title: "Set the format and position",
-        description: "Choose a starting number, an optional prefix (for Bates numbering), digit padding, and where the number appears on the page.",
+        description: "Choose a starting number and digit padding, then click or drag on the preview to place the number.",
       },
       {
         title: "Download your numbered PDF",
@@ -670,8 +670,37 @@ export const tools: Tool[] = [
       },
     ],
     faqs: [
-      { question: "Can I do Bates numbering for legal documents?", answer: "Yes, set a prefix and digit padding, like ABC-000001, and it increments across every page." },
       { question: "Can I start from a number other than 1?", answer: "Yes, you can set any starting number." },
+      { question: "Can I control exactly where the number appears?", answer: "Yes, click or drag anywhere on the page preview to place it, or use one of the quick corner presets." },
+      { question: "I need Bates-style legal numbering (e.g. ABC-000001) — is that here?", answer: "That's a dedicated tool now — see Bates Numbering." },
+    ],
+  },
+  {
+    slug: "bates-numbering",
+    name: "Bates Numbering",
+    shortDescription: "Stamp sequential legal numbering (e.g. ABC-000001) onto every page.",
+    heroDescription: "Stamp sequential Bates-style legal numbering, like ABC-000001, onto every page.",
+    accent: "primary",
+    category: "core",
+    icon: "text-multiline",
+    accept: "application/pdf",
+    guideIntro:
+      "Gojli's Bates Numbering tool stamps a sequential, zero-padded identifier — the standard used for legal document production — onto every page, with a custom prefix and control over exactly where it appears.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to Bates-stamp." },
+      {
+        title: "Set the prefix and starting number",
+        description: "Choose a prefix (e.g. ABC-), a starting number, and how many digits to zero-pad to, then click or drag on the preview to place the stamp.",
+      },
+      {
+        title: "Download your stamped PDF",
+        description: "Gojli stamps every page and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "What is Bates numbering?", answer: "A sequential identifier (e.g. ABC-000001) stamped onto every page of a legal document production, used to track and reference pages consistently across a case." },
+      { question: "Can I continue numbering from a previous batch?", answer: "Yes, set the starting number to continue right after the last number you used." },
+      { question: "Can I change the digit padding?", answer: "Yes — e.g. 6 digits gives ABC-000001, while 4 gives ABC-0001." },
     ],
   },
   {

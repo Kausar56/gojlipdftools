@@ -35,13 +35,13 @@ export function TextEditToolbar({
 
   useEffect(() => {
     if (!openMenu) return;
-    const onPointerDown = (event: MouseEvent) => {
+    const onOutsidePointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) {
         setOpenMenu(null);
       }
     };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
+    document.addEventListener("pointerdown", onOutsidePointerDown);
+    return () => document.removeEventListener("pointerdown", onOutsidePointerDown);
   }, [openMenu]);
 
   // Prefer floating just above the text, but when there isn't 44px of room
@@ -52,13 +52,29 @@ export function TextEditToolbar({
   const topAbove = topPt * scale - 44;
   const top = topAbove >= 0 ? topAbove : topPt * scale + heightPt * scale + 6;
 
+  const baseLeft = element.xPt * scale;
+  const [left, setLeft] = useState(baseLeft);
+  useEffect(() => setLeft(baseLeft), [baseLeft]);
+
+  // On a narrow phone, an element near the page's right edge would otherwise
+  // push this toolbar (a dozen-plus buttons wide) off-screen — nudge it back
+  // on-screen once its real rendered width is measurable.
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node) return;
+    const overflowRight = node.getBoundingClientRect().right - (window.innerWidth - 8);
+    if (overflowRight > 0) {
+      setLeft((current) => Math.max(8, current - overflowRight));
+    }
+  }, [left]);
+
   return (
     <div
       ref={rootRef}
-      onMouseDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
       className="absolute z-20 flex items-center gap-0.5 rounded-lg border border-primary/30 bg-base-100 p-1 shadow-lg"
       style={{
-        left: element.xPt * scale,
+        left,
         top,
       }}
     >

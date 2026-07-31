@@ -1,6 +1,7 @@
 export type ConvertResult = {
   downloadUrl: string;
   filename: string;
+  sizeBytes: number | null;
 };
 
 export class ConvertError extends Error {
@@ -42,21 +43,17 @@ async function validateBeforeUpload(file: File, inputFormat: string): Promise<vo
   }
 }
 
-export async function convertViaCloudConvert(
+async function runConversionJob(
   file: File,
-  inputFormat: string,
-  outputFormat: string,
+  startBody: Record<string, unknown>,
   onStatus?: (message: string) => void,
 ): Promise<ConvertResult> {
-  onStatus?.("Checking your file...");
-  await validateBeforeUpload(file, inputFormat);
-
   onStatus?.("Starting conversion...");
 
   const startRes = await fetch("/api/convert/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: file.name, inputFormat, outputFormat, fileSizeBytes: file.size }),
+    body: JSON.stringify({ filename: file.name, fileSizeBytes: file.size, ...startBody }),
   });
   if (!startRes.ok) {
     const body = await startRes.json().catch(() => ({}));
@@ -84,7 +81,7 @@ export async function convertViaCloudConvert(
     const data = await statusRes.json();
 
     if (data.status === "finished") {
-      return { downloadUrl: data.downloadUrl, filename: data.filename };
+      return { downloadUrl: data.downloadUrl, filename: data.filename, sizeBytes: data.sizeBytes ?? null };
     }
     if (data.status === "error") {
       throw new Error(data.error ?? "The conversion failed.");
@@ -92,4 +89,32 @@ export async function convertViaCloudConvert(
   }
 
   throw new Error("The conversion is taking too long. Please try again.");
+}
+
+export async function convertViaCloudConvert(
+  file: File,
+  inputFormat: string,
+  outputFormat: string,
+  onStatus?: (message: string) => void,
+): Promise<ConvertResult> {
+  onStatus?.("Checking your file...");
+  await validateBeforeUpload(file, inputFormat);
+
+  return runConversionJob(file, { mode: "convert", inputFormat, outputFormat }, onStatus);
+}
+
+export type OptimizeProfile = "web" | "print" | "archive" | "mrc" | "max";
+
+/** Server-side PDF compression via CloudConvert's optimize task — a heavier,
+ *  higher-quality alternative to the free client-side pdf-lib compressor,
+ *  at the cost of uploading the file and requiring an account. */
+export async function optimizePdfViaCloudConvert(
+  file: File,
+  profile: OptimizeProfile,
+  onStatus?: (message: string) => void,
+): Promise<ConvertResult> {
+  onStatus?.("Checking your file...");
+  await validateBeforeUpload(file, "pdf");
+
+  return runConversionJob(file, { mode: "optimize", inputFormat: "pdf", profile }, onStatus);
 }

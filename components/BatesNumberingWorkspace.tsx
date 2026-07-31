@@ -8,25 +8,25 @@ import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
-const CENTER_BOTTOM: PositionPct = { x: 0.5, y: 0.95 };
+const BOTTOM_RIGHT: PositionPct = { x: 0.92, y: 0.95 };
 
 const POSITION_PRESETS: { label: string; pct: PositionPct }[] = [
-  { label: "Bottom Center", pct: { x: 0.5, y: 0.95 } },
   { label: "Bottom Right", pct: { x: 0.92, y: 0.95 } },
+  { label: "Bottom Center", pct: { x: 0.5, y: 0.95 } },
   { label: "Bottom Left", pct: { x: 0.08, y: 0.95 } },
-  { label: "Top Center", pct: { x: 0.5, y: 0.05 } },
   { label: "Top Right", pct: { x: 0.92, y: 0.05 } },
+  { label: "Top Center", pct: { x: 0.5, y: 0.05 } },
   { label: "Top Left", pct: { x: 0.08, y: 0.05 } },
 ];
 
-export function PageNumbersWorkspace() {
+export function BatesNumberingWorkspace() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [template, setTemplate] = useState("Page {n} of {total}");
+  const [prefix, setPrefix] = useState("ABC-");
   const [startNumber, setStartNumber] = useState(1);
-  const [padding, setPadding] = useState(1);
-  const [fontSize, setFontSize] = useState(11);
-  const [positionPct, setPositionPct] = useState<PositionPct>(CENTER_BOTTOM);
+  const [padding, setPadding] = useState(6);
+  const [fontSize, setFontSize] = useState(9);
+  const [positionPct, setPositionPct] = useState<PositionPct>(BOTTOM_RIGHT);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -40,18 +40,12 @@ export function PageNumbersWorkspace() {
 
   function loadFile(selected: File) {
     resetOutput();
-    setPositionPct(CENTER_BOTTOM);
+    setPositionPct(BOTTOM_RIGHT);
     setFile(selected);
   }
 
   async function handleApply() {
     if (!file) return;
-    if (!template.includes("{n}")) {
-      setStatus("error");
-      setErrorMessage("The template must include {n} for the page number.");
-      return;
-    }
-
     setStatus("working");
     setErrorMessage("");
 
@@ -64,7 +58,7 @@ export function PageNumbersWorkspace() {
 
       pages.forEach((page, index) => {
         const numberStr = String(startNumber + index).padStart(padding, "0");
-        const text = template.replace("{n}", numberStr).replace("{total}", String(pages.length));
+        const text = `${prefix}${numberStr}`;
         const { width: pageWidth, height: pageHeight } = page.getSize();
         const textWidth = font.widthOfTextAtSize(text, fontSize);
 
@@ -91,7 +85,7 @@ export function PageNumbersWorkspace() {
       setStatus("done");
     } catch (error) {
       setStatus("error");
-      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't add page numbers: ${error.message}` : "Couldn't add page numbers to this PDF.",));
+      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't add Bates numbering: ${error.message}` : "Couldn't add Bates numbering to this PDF.",));
     }
   }
 
@@ -134,6 +128,8 @@ export function PageNumbersWorkspace() {
     );
   }
 
+  const previewNumber = `${prefix}${String(startNumber).padStart(padding, "0")}`;
+
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
       <div className="flex items-center justify-between gap-2 text-sm">
@@ -167,7 +163,7 @@ export function PageNumbersWorkspace() {
                 className="whitespace-nowrap rounded bg-primary/10 px-1 font-medium text-primary"
                 style={{ fontSize: Math.max(6, fontSize * scale) }}
               >
-                {template.replace("{n}", String(startNumber).padStart(padding, "0")).replace("{total}", "N")}
+                {previewNumber}
               </span>
             )}
           />
@@ -192,15 +188,15 @@ export function PageNumbersWorkspace() {
 
         <div className="space-y-4 lg:flex-2">
           <label className="block text-sm font-medium text-base-content">
-            Format
+            Prefix
             <input
               type="text"
-              value={template}
+              value={prefix}
               onChange={(event) => {
-                setTemplate(event.target.value);
+                setPrefix(event.target.value);
                 resetOutput();
               }}
-              placeholder="e.g. Page {n} of {total}, or ABC-{n}"
+              placeholder="e.g. ABC-"
               className="input input-bordered mt-1.5 w-full"
             />
           </label>
@@ -241,7 +237,7 @@ export function PageNumbersWorkspace() {
                 max={72}
                 value={fontSize}
                 onChange={(event) => {
-                  setFontSize(Math.max(6, Number(event.target.value) || 11));
+                  setFontSize(Math.max(6, Number(event.target.value) || 9));
                   resetOutput();
                 }}
                 className="input input-bordered mt-1.5 w-full"
@@ -249,7 +245,8 @@ export function PageNumbersWorkspace() {
             </label>
           </div>
           <p className="text-xs text-base-content/50">
-            Use {"{n}"} for the page number and {"{total}"} for the page count in the format.
+            Preview: <span className="font-medium text-base-content">{previewNumber}</span> (increments by 1 on
+            every page)
           </p>
         </div>
       </div>
@@ -260,7 +257,7 @@ export function PageNumbersWorkspace() {
 
       <div className="mt-5">
         {status === "done" && downloadUrl ? (
-          <a href={downloadUrl} download="numbered.pdf" className="btn btn-primary w-full">
+          <a href={downloadUrl} download="bates-numbered.pdf" className="btn btn-primary w-full">
             <ToolIcon name="download" className="h-4 w-4" />
             Download PDF
           </a>
@@ -271,7 +268,7 @@ export function PageNumbersWorkspace() {
             disabled={status === "working"}
             className="btn btn-primary w-full"
           >
-            {status === "working" ? "Applying..." : "Add Page Numbers"}
+            {status === "working" ? "Applying..." : "Add Bates Numbering"}
           </button>
         )}
       </div>
