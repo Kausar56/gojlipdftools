@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ToolIcon } from "./icons";
 import { ThemeToggle } from "./ThemeToggle";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { UserMenu } from "./UserMenu";
@@ -71,9 +71,7 @@ export function Navbar() {
 
       <div className="flex flex-1 items-center">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold text-base-content">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-content">
-            <ToolIcon name="merge" className="h-5 w-5" />
-          </span>
+          <Image src="/logo.png" alt="Gojli" width={32} height={32} priority className="h-8 w-8 rounded-lg" />
           Gojli
         </Link>
         <ul className="ml-6 hidden items-center gap-5 text-sm font-medium text-base-content/70 lg:flex">
