@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleIcon } from "./GoogleIcon";
 
-export function SignupForm() {
+export function SignupForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -20,7 +20,9 @@ export function SignupForm() {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        },
       });
       if (error) setErrorMessage(error.message);
     } catch (error) {
@@ -40,7 +42,7 @@ export function SignupForm() {
         password,
         options: {
           data: { full_name: name },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
         },
       });
 
@@ -51,7 +53,7 @@ export function SignupForm() {
       }
 
       if (data.session) {
-        router.push("/dashboard");
+        router.push(redirectTo);
         router.refresh();
         return;
       }

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { GoogleIcon } from "./GoogleIcon";
 
-export function LoginForm() {
+export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +19,9 @@ export function LoginForm() {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        },
       });
       if (error) setErrorMessage(error.message);
     } catch (error) {
@@ -40,7 +42,7 @@ export function LoginForm() {
         setStatus("idle");
         return;
       }
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Couldn't log in right now.");

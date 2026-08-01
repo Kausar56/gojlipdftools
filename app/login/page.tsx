@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AuthPageLayout } from "@/components/AuthPageLayout";
 import { LoginForm } from "@/components/LoginForm";
 import { createClient } from "@/lib/supabase/server";
+import { safeRedirectPath } from "@/lib/safeRedirect";
 
 export const metadata: Metadata = {
   title: "Log In",
@@ -16,7 +17,13 @@ export const metadata: Metadata = {
 // while the login form on the same page looked stuck.
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string | string[] }>;
+}) {
+  const redirectTarget = safeRedirectPath((await searchParams).redirect, "/dashboard");
+
   // redirect() works by throwing internally — calling it *inside* the try
   // block let a bare `catch` swallow that throw along with real Supabase
   // errors, silently cancelling the redirect and rendering the login form
@@ -30,11 +37,11 @@ export default async function LoginPage() {
   } catch {
     // Supabase env vars aren't set up yet — treat as logged out below.
   }
-  if (isLoggedIn) redirect("/dashboard");
+  if (isLoggedIn) redirect(redirectTarget);
 
   return (
     <AuthPageLayout>
-      <LoginForm />
+      <LoginForm redirectTo={redirectTarget} />
     </AuthPageLayout>
   );
 }

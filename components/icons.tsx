@@ -18,6 +18,19 @@ const paths: Record<string, React.ReactNode> = {
     </>
   ),
 
+  users: (
+    <>
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3.5 20c0-3.5 2.5-6 5.5-6s5.5 2.5 5.5 6" />
+      <circle cx="17" cy="9" r="2.4" />
+      <path d="M15.5 14.2c2.4.2 4 2.4 4 5.8" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M4 20V10M10 20V4M16 20v-7M20 20V8" />
+    </>
+  ),
   grid: (
     <>
       <rect x="3" y="3" width="8" height="8" rx="1" />

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { tools } from "@/lib/tools";
+import { getPublishedPosts } from "@/lib/blog";
 
 const baseUrl = "https://www.gojli.com";
 
@@ -8,9 +9,10 @@ const staticPages = [
   { path: "/pricing", changeFrequency: "monthly" as const, priority: 0.6 },
   { path: "/privacy", changeFrequency: "yearly" as const, priority: 0.3 },
   { path: "/terms", changeFrequency: "yearly" as const, priority: 0.3 },
+  { path: "/blog", changeFrequency: "daily" as const, priority: 0.6 },
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const toolRoutes: MetadataRoute.Sitemap = tools.map((tool) => ({
     url: `${baseUrl}/${tool.slug}`,
     lastModified: new Date(),
@@ -25,6 +27,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: page.priority,
   }));
 
+  let blogRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const posts = await getPublishedPosts();
+    blogRoutes = posts.map((post) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
+      lastModified: new Date(post.updatedAt),
+      changeFrequency: "monthly",
+      priority: 0.6,
+    }));
+  } catch {
+    // Supabase not configured at build time — skip blog routes rather than fail the sitemap.
+  }
+
   return [
     {
       url: baseUrl,
@@ -34,5 +49,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     ...toolRoutes,
     ...staticRoutes,
+    ...blogRoutes,
   ];
 }

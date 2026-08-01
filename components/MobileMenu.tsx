@@ -14,6 +14,7 @@ const navLinks = [
   { href: "/merge-pdf", label: "Merge" },
   { href: "/split-pdf", label: "Split" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/blog", label: "Blog" },
   { href: "/about", label: "About" },
 ];
 
