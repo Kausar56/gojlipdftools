@@ -17,8 +17,8 @@ export const megaMenu: MegaMenuCategory[] = [
     title: "Merge",
     items: [
       { label: "Merge PDF", slug: "merge-pdf" },
-      { label: "Alternate & Mix", description: "Interleave pages from two PDFs into one document." },
-      { label: "Organize", description: "Reorder, rotate, or delete pages by dragging thumbnails." },
+      { label: "Alternate & Mix", slug: "alternate-mix" },
+      { label: "Organize", slug: "organize" },
     ],
   },
   {
@@ -29,18 +29,18 @@ export const megaMenu: MegaMenuCategory[] = [
       // built-in "Split in Half" shortcut already in that tool) — pointing
       // them at the same slug instead of building near-duplicate tools.
       { label: "Extract Pages", slug: "split-pdf", description: "Pull out specific pages into their own new PDF." },
-      { label: "Split by Bookmarks", description: "Break a PDF into files using its bookmark structure." },
+      { label: "Split by Bookmarks", slug: "split-by-bookmarks" },
       { label: "Split in Half", slug: "split-pdf", description: "Divide a PDF into two equal halves in one click." },
-      { label: "Split by Size", description: "Split a PDF into parts under a target file size." },
-      { label: "Split by Text", description: "Split a PDF wherever matching text appears." },
+      { label: "Split by Size", slug: "split-by-size" },
+      { label: "Split by Text", slug: "split-by-text" },
     ],
   },
   {
     title: "Edit & Sign",
     items: [
       { label: "Edit PDF", slug: "edit-pdf" },
-      { label: "Fill & Sign", description: "Fill out form fields and add your signature." },
-      { label: "Create Forms", description: "Add fillable text fields, checkboxes, and signatures." },
+      { label: "Fill & Sign", slug: "fill-sign" },
+      { label: "Create Forms", slug: "create-forms" },
       { label: "Delete Pages", slug: "delete-pages" },
     ],
   },
@@ -60,9 +60,9 @@ export const megaMenu: MegaMenuCategory[] = [
   {
     title: "Convert from PDF",
     items: [
-      { label: "PDF to Excel", description: "Turn tables in a PDF into an editable spreadsheet." },
+      { label: "PDF to Excel", slug: "pdf-to-excel" },
       { label: "PDF to JPG", slug: "pdf-to-jpg" },
-      { label: "PDF to PowerPoint", description: "Convert PDF pages into editable slides." },
+      { label: "PDF to PowerPoint", slug: "pdf-to-ppt" },
       { label: "PDF to Text", slug: "pdf-to-text" },
       { label: "PDF to Word", slug: "pdf-to-word" },
     ],
@@ -70,7 +70,7 @@ export const megaMenu: MegaMenuCategory[] = [
   {
     title: "Convert to PDF",
     items: [
-      { label: "HTML to PDF", description: "Turn a web page or HTML file into a PDF." },
+      { label: "HTML to PDF", slug: "html-to-pdf" },
       { label: "JPG to PDF", slug: "jpg-to-pdf" },
       { label: "Word to PDF", slug: "word-to-pdf" },
       { label: "Excel to PDF", slug: "excel-to-pdf" },
@@ -81,16 +81,16 @@ export const megaMenu: MegaMenuCategory[] = [
     title: "Other",
     items: [
       { label: "Bates Numbering", slug: "bates-numbering" },
-      { label: "Create Bookmarks", description: "Add a navigable outline to a PDF." },
-      { label: "Crop", description: "Trim the margins or visible area of PDF pages." },
+      { label: "Create Bookmarks", slug: "create-bookmarks" },
+      { label: "Crop", slug: "crop" },
       { label: "Edit Metadata", slug: "edit-metadata" },
-      { label: "Extract Images", description: "Save every embedded image out of a PDF." },
-      { label: "Flip", description: "Mirror PDF pages horizontally or vertically." },
-      { label: "Grayscale", description: "Convert a color PDF to black and white." },
+      { label: "Extract Images", slug: "extract-images" },
+      { label: "Flip", slug: "flip" },
+      { label: "Grayscale", slug: "grayscale" },
       { label: "Header & Footer", slug: "header-footer" },
-      { label: "N-up", description: "Print multiple pages onto a single sheet." },
+      { label: "N-up", slug: "n-up" },
       { label: "Page Numbers", slug: "page-numbers" },
-      { label: "Repair", description: "Attempt to fix a corrupted or unreadable PDF." },
+      { label: "Repair", slug: "repair" },
       { label: "Resize", slug: "resize-pdf" },
       { label: "Rotate PDF", slug: "rotate-pdf" },
       { label: "Remove Annotations", slug: "remove-annotations" },
@@ -99,7 +99,7 @@ export const megaMenu: MegaMenuCategory[] = [
   {
     title: "Scans",
     items: [
-      { label: "Deskew", description: "Straighten crooked scanned pages." },
+      { label: "Deskew", slug: "deskew" },
       { label: "OCR", slug: "ocr" },
     ],
   },

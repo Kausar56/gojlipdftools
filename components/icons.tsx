@@ -4,6 +4,44 @@ type IconProps = {
 
 const paths: Record<string, React.ReactNode> = {
   cloud: <path d="M6.5 19a4.5 4.5 0 0 1-.4-8.98A6 6 0 0 1 18 12a4 4 0 0 1 0 8H6.5z" />,
+  "flip-h": (
+    <>
+      <path d="M12 3v18" strokeDasharray="2 3" />
+      <path d="M16 8l4 4-4 4" />
+      <path d="M8 8l-4 4 4 4" />
+    </>
+  ),
+  grayscale: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" stroke="none" />
+    </>
+  ),
+
+  grid: (
+    <>
+      <rect x="3" y="3" width="8" height="8" rx="1" />
+      <rect x="13" y="3" width="8" height="8" rx="1" />
+      <rect x="3" y="13" width="8" height="8" rx="1" />
+      <rect x="13" y="13" width="8" height="8" rx="1" />
+    </>
+  ),
+  crop: (
+    <>
+      <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+      <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+    </>
+  ),
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="18" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="6" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="12" r="1.3" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="18" r="1.3" fill="currentColor" stroke="none" />
+    </>
+  ),
   ocr: (
     <>
       <rect x="4" y="4" width="12" height="16" rx="1.5" />
@@ -82,6 +120,22 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M7 15V7M7 7l4 3-4 3.2" />
       <path d="M17 8h4M19 6v4" />
       <path d="M17 16h4M17 20h4" />
+    </>
+  ),
+  "pdf-to-excel": (
+    <>
+      <rect x="9" y="8" width="12" height="12" rx="1.5" />
+      <path d="M9 12h12M9 16h12M15 8v12" />
+      <path d="M3 8h4M5 6v4" />
+      <path d="M3 16h4M3 20h4" />
+    </>
+  ),
+  "pdf-to-ppt": (
+    <>
+      <rect x="9" y="8" width="12" height="12" rx="1.5" />
+      <path d="M13 19v-8M13 11l4 3-4 3.2" />
+      <path d="M3 8h4M5 6v4" />
+      <path d="M3 16h4M3 20h4" />
     </>
   ),
   "protect-pdf": (

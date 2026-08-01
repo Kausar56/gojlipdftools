@@ -32,8 +32,13 @@ Keep it updated whenever a tool's status changes.
 | Word to PDF | `word-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
 | Excel to PDF | `excel-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
 | PPT to PDF | `ppt-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
+| PDF to Excel | `pdf-to-excel` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
+| PDF to PowerPoint | `pdf-to-ppt` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
 
-**9 live, 4 wired pending API key**, out of 13 tools.
+**9 live, 6 wired pending API key**, out of 15 tools listed here (this table predates several
+later additions — OCR, Page Numbers, Bates Numbering, Header & Footer, Resize PDF, etc. — and
+hasn't been reconciled with the full current tool list; treat it as a snapshot of the CloudConvert
+tools specifically, not a complete inventory).
 
 ---
 
@@ -129,7 +134,11 @@ page count.
 `next.config.ts` were all removed — none of it is needed anymore. `next.config.ts` is back to
 default.
 
-## 🔑 PDF to Word / Word to PDF / Excel to PDF / PPT to PDF
+## 🔑 PDF to Word / Word to PDF / Excel to PDF / PPT to PDF / PDF to Excel / PDF to PowerPoint
+
+`pdf-to-excel` (→ `.xlsx`) and `pdf-to-ppt` (→ `.pptx`) reuse this exact same architecture and
+`OfficeConvertWorkspace` component, just with `inputFormat="pdf"` and a different `outputFormat` —
+no new backend code needed.
 
 **Decision**: LibreOffice headless (the pure-open-source route) needs a persistent native install —
 not viable on Vercel serverless without a custom container/always-on VM, which is out of scope.

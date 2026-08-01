@@ -43,36 +43,20 @@ async function validateBeforeUpload(file: File, inputFormat: string): Promise<vo
   }
 }
 
-async function runConversionJob(
-  file: File,
-  startBody: Record<string, unknown>,
-  onStatus?: (message: string) => void,
-): Promise<ConvertResult> {
-  onStatus?.("Starting conversion...");
-
+async function startConversionJob(startBody: Record<string, unknown>) {
   const startRes = await fetch("/api/convert/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: file.name, fileSizeBytes: file.size, ...startBody }),
+    body: JSON.stringify(startBody),
   });
   if (!startRes.ok) {
     const body = await startRes.json().catch(() => ({}));
     throw new ConvertError(body.error ?? "Couldn't start the conversion.", body.code);
   }
-  const { jobId, uploadUrl, uploadParameters } = await startRes.json();
+  return startRes.json() as Promise<{ jobId: string; uploadUrl?: string; uploadParameters?: Record<string, string> }>;
+}
 
-  onStatus?.("Uploading your file...");
-  const form = new FormData();
-  for (const [key, value] of Object.entries(uploadParameters as Record<string, string>)) {
-    form.append(key, value);
-  }
-  form.append("file", file);
-
-  const uploadRes = await fetch(uploadUrl, { method: "POST", body: form });
-  if (!uploadRes.ok) {
-    throw new Error("Uploading your file to the conversion service failed.");
-  }
-
+async function pollConversionJob(jobId: string, onStatus?: (message: string) => void): Promise<ConvertResult> {
   onStatus?.("Converting...");
   for (let attempt = 0; attempt < 60; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -89,6 +73,33 @@ async function runConversionJob(
   }
 
   throw new Error("The conversion is taking too long. Please try again.");
+}
+
+async function runConversionJob(
+  file: File,
+  startBody: Record<string, unknown>,
+  onStatus?: (message: string) => void,
+): Promise<ConvertResult> {
+  onStatus?.("Starting conversion...");
+  const { jobId, uploadUrl, uploadParameters } = await startConversionJob({
+    filename: file.name,
+    fileSizeBytes: file.size,
+    ...startBody,
+  });
+
+  onStatus?.("Uploading your file...");
+  const form = new FormData();
+  for (const [key, value] of Object.entries(uploadParameters ?? {})) {
+    form.append(key, value);
+  }
+  form.append("file", file);
+
+  const uploadRes = await fetch(uploadUrl!, { method: "POST", body: form });
+  if (!uploadRes.ok) {
+    throw new Error("Uploading your file to the conversion service failed.");
+  }
+
+  return pollConversionJob(jobId, onStatus);
 }
 
 export async function convertViaCloudConvert(
@@ -117,4 +128,13 @@ export async function optimizePdfViaCloudConvert(
   await validateBeforeUpload(file, "pdf");
 
   return runConversionJob(file, { mode: "optimize", inputFormat: "pdf", profile }, onStatus);
+}
+
+/** Renders a live web page to PDF via CloudConvert's headless-browser
+ *  "capture-website" task — unlike every other CloudConvert flow here, there's
+ *  no file to upload at all: the server fetches the URL directly. */
+export async function captureUrlToPdf(url: string, onStatus?: (message: string) => void): Promise<ConvertResult> {
+  onStatus?.("Starting capture...");
+  const { jobId } = await startConversionJob({ mode: "capture", sourceUrl: url, outputFormat: "pdf" });
+  return pollConversionJob(jobId, onStatus);
 }

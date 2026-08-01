@@ -4,22 +4,34 @@ import { createClient } from "@/lib/supabase/server";
 import { getPlanLimits, getUserPlan, getMonthlyUsageCount, recordUsage } from "@/lib/usageLimits";
 
 export async function POST(request: Request) {
-  let mode: "convert" | "optimize";
+  let mode: "convert" | "optimize" | "capture";
   let inputFormat: string;
   let outputFormat: string;
   let profile: string;
   let filename: string;
   let fileSizeBytes: number;
+  let sourceUrl: string;
 
   try {
     const body = await request.json();
-    mode = body.mode === "optimize" ? "optimize" : "convert";
+    mode = body.mode === "optimize" ? "optimize" : body.mode === "capture" ? "capture" : "convert";
     inputFormat = String(body.inputFormat ?? "");
     outputFormat = String(body.outputFormat ?? "");
     profile = String(body.profile ?? "web");
     filename = String(body.filename ?? "file");
     fileSizeBytes = Number(body.fileSizeBytes ?? 0);
-    if (!inputFormat) {
+    sourceUrl = String(body.sourceUrl ?? "");
+
+    if (mode === "capture") {
+      if (!sourceUrl) {
+        return NextResponse.json({ error: "Missing sourceUrl." }, { status: 400 });
+      }
+      try {
+        new URL(sourceUrl);
+      } catch {
+        return NextResponse.json({ error: "That doesn't look like a valid URL." }, { status: 400 });
+      }
+    } else if (!inputFormat) {
       return NextResponse.json({ error: "Missing inputFormat." }, { status: 400 });
     }
     if (mode === "convert" && !outputFormat) {
@@ -79,6 +91,27 @@ export async function POST(request: Request) {
 
   try {
     const cloudConvert = getCloudConvert();
+
+    // "capture" fetches and renders a live URL itself — there's no uploaded
+    // file, so it skips the import/upload task entirely.
+    if (mode === "capture") {
+      const job = await cloudConvert.jobs.create({
+        tasks: {
+          "capture-file": {
+            operation: "capture-website",
+            url: sourceUrl,
+            output_format: outputFormat || "pdf",
+          },
+          "export-file": {
+            operation: "export/url",
+            input: "capture-file",
+          },
+        },
+      });
+
+      await recordUsage(supabase, userId, "html-capture", 0);
+      return NextResponse.json({ jobId: job.id });
+    }
 
     const baseName = filename.replace(/\.[^./\\]+$/, "");
     const processTask =

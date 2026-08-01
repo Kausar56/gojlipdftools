@@ -62,6 +62,61 @@ export const tools: Tool[] = [
     ],
   },
   {
+    slug: "fill-sign",
+    name: "Fill & Sign",
+    shortDescription: "Fill out form fields and add your signature.",
+    heroDescription: "Fill out a PDF and add your signature, ready to send back.",
+    accent: "primary",
+    category: "core",
+    icon: "signature",
+    accept: "application/pdf",
+    guideIntro:
+      "Need to fill out a form and sign it without printing anything? Gojli's Fill & Sign tool lets you drop text, checkmarks, dates, and a hand-drawn signature anywhere on a PDF, right in your browser.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the form or document you need to fill out and sign." },
+      {
+        title: "Add text, checkmarks, and your signature",
+        description: "Use the toolbar to add text, today's date, a checkmark, or draw your signature — then drag each one into place on the page.",
+      },
+      {
+        title: "Save and download",
+        description: "Once everything's in place, save the PDF and download it, ready to send back.",
+      },
+    ],
+    faqs: [
+      { question: "Can I sign more than one page?", answer: "Yes, move between pages and add text, checkmarks, or your signature to any of them." },
+      { question: "Do I need to draw my signature every time?", answer: "You'll draw it once per session — each additional signature you add reuses the same drawing." },
+    ],
+  },
+  {
+    slug: "create-forms",
+    name: "Create Forms",
+    shortDescription: "Add fillable text fields, checkboxes, and signatures.",
+    heroDescription: "Add real, fillable form fields to a PDF.",
+    accent: "primary",
+    category: "core",
+    icon: "checkbox",
+    accept: "application/pdf",
+    guideIntro:
+      "Turn a static PDF into a form other people can actually fill out — Gojli's Create Forms tool adds real interactive fields (not just visual stamps) that work in Adobe Acrobat, Preview, and browser PDF viewers.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF you want to turn into a fillable form." },
+      {
+        title: "Add and place fields",
+        description: "Add text fields, checkboxes, or a signature field, then drag them into place and resize as needed.",
+      },
+      {
+        title: "Create and download",
+        description: "Gojli writes real AcroForm fields into the PDF and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Will people be able to actually type into these fields?", answer: "Yes, these are real interactive form fields, not static text — anyone opening the PDF in Acrobat, Preview, or most browsers can fill them in." },
+      { question: "Is the signature field a real e-signature?", answer: "No — it's a text field labeled for a typed signature. Creating a real cryptographic signature field isn't something this tool supports." },
+      { question: "Can I rename a field?", answer: "Yes, each added field has an editable name shown below the page preview." },
+    ],
+  },
+  {
     slug: "merge-pdf",
     name: "Merge PDF",
     shortDescription: "Combine multiple PDFs into a single file, in the order you choose.",
@@ -95,6 +150,60 @@ export const tools: Tool[] = [
     ],
   },
   {
+    slug: "alternate-mix",
+    name: "Alternate & Mix",
+    shortDescription: "Interleave pages from two PDFs into one document.",
+    heroDescription: "Interleave pages from two PDFs into one document, page by page.",
+    accent: "primary",
+    category: "core",
+    icon: "merge",
+    accept: "application/pdf",
+    guideIntro:
+      "Scanned a double-sided document as two separate one-sided stacks? Gojli's Alternate & Mix tool weaves the pages of two PDFs together — page 1 from the first, page 1 from the second, page 2 from the first, and so on.",
+    guideSteps: [
+      { title: "Upload both PDFs", description: "Choose the two PDF files you want to interleave." },
+      {
+        title: "Set the order",
+        description: "Pick which document's page comes first in each pair, and reverse the second document's page order if it's a back-side scan.",
+      },
+      {
+        title: "Combine and download",
+        description: "Gojli weaves the pages together and gives you a single combined PDF to download.",
+      },
+    ],
+    faqs: [
+      { question: "What if the two PDFs have different page counts?", answer: "Interleaving continues until the shorter document runs out, then the rest of the longer document's pages are added at the end." },
+      { question: "Why would I reverse the second document's pages?", answer: "When you scan double-sided pages as two separate stacks by flipping the whole stack over, the back-side stack usually comes out in reverse order — reversing it before interleaving fixes that." },
+    ],
+  },
+  {
+    slug: "organize",
+    name: "Organize",
+    shortDescription: "Reorder, rotate, or delete pages by dragging thumbnails.",
+    heroDescription: "Reorder, rotate, or delete pages by dragging thumbnails.",
+    accent: "primary",
+    category: "core",
+    icon: "merge",
+    accept: "application/pdf",
+    guideIntro:
+      "Gojli's Organize tool shows every page as a thumbnail you can drag into a new order, rotate, or delete, all before saving a single new PDF.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file whose pages you want to reorganize." },
+      {
+        title: "Reorder, rotate, or delete pages",
+        description: "Drag a page by its grip handle to move it, use the rotate buttons to turn it, or delete pages you don't need.",
+      },
+      {
+        title: "Save your organized PDF",
+        description: "Gojli rebuilds the PDF in your new page order and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Can I reorder pages on a touchscreen?", answer: "Yes, dragging the grip handle works with touch as well as a mouse." },
+      { question: "Can I delete every page?", answer: "No, at least one page must remain in the document." },
+    ],
+  },
+  {
     slug: "split-pdf",
     name: "Split PDF",
     shortDescription: "Extract pages or break one PDF into several smaller files.",
@@ -123,6 +232,88 @@ export const tools: Tool[] = [
     faqs: [
       { question: "Can I extract just one page from a PDF?", answer: "Yes, you can select a single page or any combination of pages to extract as a new PDF." },
       { question: "Does splitting reduce quality?", answer: "No, splitting only separates pages — it doesn't recompress or alter their content." },
+    ],
+  },
+  {
+    slug: "split-by-bookmarks",
+    name: "Split by Bookmarks",
+    shortDescription: "Break a PDF into files using its bookmark structure.",
+    heroDescription: "Break a PDF into files using its bookmark (outline) structure.",
+    accent: "secondary",
+    category: "core",
+    icon: "split",
+    accept: "application/pdf",
+    guideIntro:
+      "If your PDF already has bookmarks — chapters in an ebook, sections in a report — Gojli's Split by Bookmarks tool uses them to automatically split the file into one PDF per section, no manual page ranges needed.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose a PDF that has bookmarks (an outline/table of contents) already set." },
+      {
+        title: "Review the detected bookmarks",
+        description: "Gojli reads the top-level bookmarks and shows which page each one starts at.",
+      },
+      {
+        title: "Split and download",
+        description: "Click Split by Bookmarks and download each section as its own PDF, individually.",
+      },
+    ],
+    faqs: [
+      { question: "What if my PDF has no bookmarks?", answer: "You'll see a message saying none were found — use the plain Split PDF tool to split by page ranges instead." },
+      { question: "Does it use nested/sub-bookmarks too?", answer: "Only top-level bookmarks are used as split points — sub-bookmarks stay inside their parent section's file." },
+      { question: "What happens to pages before the first bookmark?", answer: "They're kept as their own leading section (e.g. a cover page or table of contents) instead of being dropped." },
+    ],
+  },
+  {
+    slug: "split-by-size",
+    name: "Split by Size",
+    shortDescription: "Split a PDF into parts under a target file size.",
+    heroDescription: "Split a PDF into parts that each stay under a target file size.",
+    accent: "secondary",
+    category: "core",
+    icon: "split",
+    accept: "application/pdf",
+    guideIntro:
+      "Need to email a PDF but it's too big to attach? Gojli's Split by Size tool breaks a large PDF into several smaller parts, each kept under a size limit you choose.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the large PDF file you want broken into smaller parts." },
+      {
+        title: "Set a target size",
+        description: "Choose a maximum size per part, in MB or KB — for example, to stay under an email attachment limit.",
+      },
+      {
+        title: "Split and download",
+        description: "Gojli groups consecutive pages into parts that each stay under your target size, ready to download individually.",
+      },
+    ],
+    faqs: [
+      { question: "What if a single page is bigger than my target size?", answer: "A page can't be split further, so that part will be shown as still over the limit — you'll see a warning if this happens." },
+      { question: "Do the pages stay in order?", answer: "Yes, each part is a consecutive block of pages in their original order." },
+    ],
+  },
+  {
+    slug: "split-by-text",
+    name: "Split by Text",
+    shortDescription: "Split a PDF wherever matching text appears.",
+    heroDescription: "Split a PDF into parts wherever a page contains matching text.",
+    accent: "secondary",
+    category: "core",
+    icon: "split",
+    accept: "application/pdf",
+    guideIntro:
+      "Got a batch of scanned invoices or forms combined into one PDF, each one starting with a recognizable label? Gojli's Split by Text tool scans every page and starts a new file wherever your search text appears.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the combined PDF you want split apart." },
+      {
+        title: "Enter the split text",
+        description: "Type the text that marks the start of a new document — e.g. \"INVOICE\" or \"Account Number\".",
+      },
+      {
+        title: "Split and download",
+        description: "Gojli scans every page's text and starts a new part wherever it finds a match, ready to download individually.",
+      },
+    ],
+    faqs: [
+      { question: "Does this work on scanned (image-only) PDFs?", answer: "Only if the text is already selectable/searchable — run OCR first (see our OCR tool) if it's a plain image scan." },
+      { question: "What if my text never appears again after the first page?", answer: "You'll see a message and the whole document is kept as one file, since no split points were found." },
     ],
   },
   {
@@ -184,6 +375,60 @@ export const tools: Tool[] = [
     faqs: [
       { question: "Will the formatting stay the same?", answer: "We keep layout, fonts, and images as close to the original PDF as the format allows." },
       { question: "Can I edit the file afterwards?", answer: "Yes, the output is a standard .docx file you can open and edit in Word or similar apps." },
+    ],
+  },
+  {
+    slug: "pdf-to-excel",
+    name: "PDF to Excel",
+    shortDescription: "Turn tables in a PDF into an editable spreadsheet.",
+    heroDescription: "Turn tables in a PDF into an editable spreadsheet.",
+    accent: "accent",
+    category: "convert",
+    icon: "pdf-to-excel",
+    accept: "application/pdf",
+    guideIntro:
+      "Copying numbers out of a PDF by hand is slow and error-prone. Gojli's PDF to Excel tool detects tables and text in your PDF and turns them into an editable .xlsx spreadsheet.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file with the tables or data you want in a spreadsheet." },
+      {
+        title: "Let Gojli convert it",
+        description: "Your file is securely processed and converted, keeping rows and columns as close to the original layout as the format allows.",
+      },
+      {
+        title: "Download your spreadsheet",
+        description: "Save the resulting .xlsx file and open it in Excel, Google Sheets, or any compatible app.",
+      },
+    ],
+    faqs: [
+      { question: "Will tables stay lined up in columns?", answer: "We keep rows and columns as close to the original PDF layout as the format allows." },
+      { question: "What about PDFs that are scanned images, not real text?", answer: "Run OCR first (see our OCR tool) to make the text recognizable, then convert to Excel." },
+    ],
+  },
+  {
+    slug: "pdf-to-ppt",
+    name: "PDF to PowerPoint",
+    shortDescription: "Convert PDF pages into editable slides.",
+    heroDescription: "Convert PDF pages into editable slides.",
+    accent: "primary",
+    category: "convert",
+    icon: "pdf-to-ppt",
+    accept: "application/pdf",
+    guideIntro:
+      "Need to present or edit something that only exists as a PDF? Gojli's PDF to PowerPoint tool turns each page into an editable .pptx slide.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want turned into a slide deck." },
+      {
+        title: "Let Gojli convert it",
+        description: "Each page becomes its own slide, keeping layout, images, and text as close to the original as the format allows.",
+      },
+      {
+        title: "Download your slide deck",
+        description: "Save the resulting .pptx file and open it in PowerPoint, Google Slides, or any compatible app to keep editing.",
+      },
+    ],
+    faqs: [
+      { question: "Does each PDF page become a slide?", answer: "Yes, each page in the PDF becomes one slide in the output deck." },
+      { question: "Can I edit the text and images afterwards?", answer: "Yes, the output is a standard .pptx file you can open and edit in PowerPoint or similar apps." },
     ],
   },
   {
@@ -274,6 +519,33 @@ export const tools: Tool[] = [
     faqs: [
       { question: "Do animations and transitions carry over?", answer: "PDF is a static format, so each slide becomes a single page without animations." },
       { question: "Will slide design stay the same?", answer: "Yes, layout, images, and text keep their original look." },
+    ],
+  },
+  {
+    slug: "html-to-pdf",
+    name: "HTML to PDF",
+    shortDescription: "Turn a web page or HTML file into a PDF.",
+    heroDescription: "Turn a web page or HTML file into a PDF.",
+    accent: "accent",
+    category: "convert",
+    icon: "file",
+    accept: ".html,.htm,text/html",
+    guideIntro:
+      "Need a permanent, shareable copy of a web page or a local HTML file? Gojli's HTML to PDF tool renders it in a real browser and gives you back a proper PDF.",
+    guideSteps: [
+      { title: "Choose a URL or an HTML file", description: "Paste the address of a live web page, or upload a saved .html file." },
+      {
+        title: "Let Gojli render it",
+        description: "The page is rendered in a real browser, keeping layout, images, and styling as close to the original as possible.",
+      },
+      {
+        title: "Download your PDF",
+        description: "Save the resulting PDF, ready to archive, print, or share.",
+      },
+    ],
+    faqs: [
+      { question: "Can it convert pages that need a login?", answer: "No, the page is fetched the same way a normal visitor would see it, so anything behind a login or paywall won't come through." },
+      { question: "Does long content split across pages properly?", answer: "Yes, the page is paginated like a normal print-to-PDF, splitting at page boundaries." },
     ],
   },
   {
@@ -513,6 +785,142 @@ export const tools: Tool[] = [
     ],
   },
   {
+    slug: "create-bookmarks",
+    name: "Create Bookmarks",
+    shortDescription: "Add a navigable outline to a PDF.",
+    heroDescription: "Add a navigable outline (table of contents) to a PDF.",
+    accent: "primary",
+    category: "core",
+    icon: "file",
+    accept: "application/pdf",
+    guideIntro:
+      "PDF readers show a bookmark sidebar for quick navigation, but not every PDF has one. Gojli's Create Bookmarks tool lets you add your own — jump to a page, give it a title, and it becomes a clickable entry in the outline panel.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF you want to add bookmarks to." },
+      {
+        title: "Add a bookmark for each page",
+        description: "Browse to a page, type a title, and click Add Bookmark. Reorder or remove entries as needed.",
+      },
+      {
+        title: "Save your bookmarked PDF",
+        description: "Gojli writes the outline into the PDF and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Where do the bookmarks show up?", answer: "In the outline/bookmarks sidebar panel of PDF readers like Adobe Acrobat, Preview, or browser PDF viewers." },
+      { question: "Can I nest bookmarks under each other?", answer: "Not yet — this creates a flat list of top-level bookmarks." },
+      { question: "Does this replace an existing outline?", answer: "Yes, saving overwrites any outline the PDF already had with the one you built here." },
+    ],
+  },
+  {
+    slug: "crop",
+    name: "Crop",
+    shortDescription: "Trim the margins or visible area of PDF pages.",
+    heroDescription: "Trim the margins or visible area of PDF pages.",
+    accent: "primary",
+    category: "core",
+    icon: "crop",
+    accept: "application/pdf",
+    guideIntro:
+      "Scanned pages with wide margins, or a PDF exported with extra white space? Gojli's Crop tool lets you drag out exactly the area you want to keep, right on a live preview.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file whose margins or visible area you want to trim." },
+      {
+        title: "Drag out the crop area",
+        description: "Drag the box's edges or corners to set the area to keep, and move the whole box by dragging inside it.",
+      },
+      {
+        title: "Crop and download",
+        description: "Apply the crop to just the current page, or every page at once, then download the result.",
+      },
+    ],
+    faqs: [
+      { question: "Does cropping delete the trimmed content permanently?", answer: "No, it sets the page's visible area (CropBox) — most viewers and print show only the cropped region, but the original content is still in the file." },
+      { question: "Can I use a different crop on different pages?", answer: "Yes, uncheck \"Apply to all pages\", set a crop, then move to another page and crop it separately." },
+    ],
+  },
+  {
+    slug: "extract-images",
+    name: "Extract Images",
+    shortDescription: "Save every embedded image out of a PDF.",
+    heroDescription: "Save every embedded image out of a PDF.",
+    accent: "accent",
+    category: "core",
+    icon: "image-to-pdf",
+    accept: "application/pdf",
+    guideIntro:
+      "Need the original photos or graphics out of a PDF instead of the whole document? Gojli's Extract Images tool scans every page and pulls out each embedded image as its own downloadable file.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF whose images you want to save out." },
+      {
+        title: "Let Gojli scan it",
+        description: "Every page is scanned for embedded images, which are decoded right in your browser.",
+      },
+      {
+        title: "Download each image",
+        description: "Download each extracted image individually as a .jpg or .png file.",
+      },
+    ],
+    faqs: [
+      { question: "Does this work for every image in every PDF?", answer: "Most photos (JPEG-compressed) and simple raw images extract cleanly. A few less common encodings (JPEG2000, fax-compressed scans, indexed-palette images) aren't supported and are skipped." },
+      { question: "Are duplicate images extracted more than once?", answer: "No, an image reused across multiple pages is only extracted once." },
+    ],
+  },
+  {
+    slug: "flip",
+    name: "Flip",
+    shortDescription: "Mirror PDF pages horizontally or vertically.",
+    heroDescription: "Mirror PDF pages horizontally or vertically.",
+    accent: "secondary",
+    category: "core",
+    icon: "flip-h",
+    accept: "application/pdf",
+    guideIntro:
+      "Need a mirrored version of a page — for a transfer print, a scanned page saved backwards, or a design mockup? Gojli's Flip tool mirrors each page's content horizontally or vertically, page by page.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want to mirror." },
+      {
+        title: "Flip each page as needed",
+        description: "Toggle horizontal or vertical flip on any page individually, or flip every page at once.",
+      },
+      {
+        title: "Save your flipped PDF",
+        description: "Gojli mirrors the content of every flipped page and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Is this the same as rotating a page?", answer: "No — rotating turns a page, but a mirror flip reverses it like a reflection, which a rotation alone can never do." },
+      { question: "Can I flip both horizontally and vertically at once?", answer: "Yes, that combination is equivalent to a 180° rotation with mirrored content." },
+    ],
+  },
+  {
+    slug: "grayscale",
+    name: "Grayscale",
+    shortDescription: "Convert a color PDF to black and white.",
+    heroDescription: "Convert a color PDF to black and white.",
+    accent: "secondary",
+    category: "core",
+    icon: "grayscale",
+    accept: "application/pdf",
+    guideIntro:
+      "Printing on a black-and-white printer, or just want a document without color? Gojli's Grayscale tool desaturates every page — text, graphics, and images alike.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the color PDF you want converted to black and white." },
+      {
+        title: "Pick a quality level",
+        description: "Higher quality looks sharper (especially for text-heavy pages) at the cost of a larger file.",
+      },
+      {
+        title: "Download your grayscale PDF",
+        description: "Gojli desaturates every page and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Will the text still be selectable afterward?", answer: "No — each page is converted to a high-resolution grayscale image, so text is no longer selectable or searchable, only visible." },
+      { question: "Why rasterize instead of just recoloring the text and shapes?", answer: "Rasterizing guarantees every element on the page — text, vector graphics, images, gradients — is genuinely desaturated, rather than only some of them." },
+    ],
+  },
+  {
     slug: "flatten-pdf",
     name: "Flatten PDF",
     shortDescription: "Merge form fields and layers into static page content.",
@@ -728,6 +1136,87 @@ export const tools: Tool[] = [
     faqs: [
       { question: "Can I include page numbers in the footer text?", answer: "Yes, use {page} for the current page and {pages} for the total page count." },
       { question: "Can I leave the header empty and only add a footer?", answer: "Yes, any of the six text zones can be left blank." },
+    ],
+  },
+  {
+    slug: "n-up",
+    name: "N-up",
+    shortDescription: "Print multiple pages onto a single sheet.",
+    heroDescription: "Print multiple pages onto a single sheet, in a grid layout.",
+    accent: "primary",
+    category: "core",
+    icon: "grid",
+    accept: "application/pdf",
+    guideIntro:
+      "Save paper by fitting several pages onto one sheet — Gojli's N-up tool arranges your PDF's pages into a grid (2, 4, 6, or 9 per sheet) on new A4 pages.",
+    guideSteps: [
+      { title: "Upload your PDF", description: "Choose the PDF file you want laid out multiple-pages-per-sheet." },
+      {
+        title: "Pick a layout",
+        description: "Choose how many pages per sheet (2, 4, 6, or 9) and the sheet orientation.",
+      },
+      {
+        title: "Download your laid-out PDF",
+        description: "Gojli scales each page to fit its grid cell (keeping its original proportions) and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Will pages get stretched or distorted?", answer: "No, each page is scaled down proportionally to fit its cell, then centered — nothing is stretched." },
+      { question: "What size are the output sheets?", answer: "Standard A4, in the orientation you choose." },
+    ],
+  },
+  {
+    slug: "repair",
+    name: "Repair",
+    shortDescription: "Attempt to fix a corrupted or unreadable PDF.",
+    heroDescription: "Attempt to fix a corrupted or unreadable PDF.",
+    accent: "secondary",
+    category: "core",
+    icon: "file",
+    accept: "application/pdf",
+    guideIntro:
+      "A PDF that won't open properly often just has a damaged internal structure, not damaged content. Gojli's Repair tool re-parses the file as leniently as possible and rebuilds it as a fresh, well-formed PDF.",
+    guideSteps: [
+      { title: "Upload your damaged PDF", description: "Choose the PDF file that won't open properly or shows errors." },
+      {
+        title: "Let Gojli attempt a repair",
+        description: "The file is re-parsed carefully and rebuilt with a clean internal structure.",
+      },
+      {
+        title: "Download the repaired PDF",
+        description: "If any pages were recoverable, download the rebuilt file.",
+      },
+    ],
+    faqs: [
+      { question: "Can this fix any corrupted PDF?", answer: "No — it fixes common structural issues (a broken cross-reference table, minor invalid objects), but a severely truncated or overwritten file may not be recoverable at all." },
+      { question: "Will this change the content of my PDF?", answer: "No, only the file's internal structure is rebuilt — the visible content is left as-is." },
+    ],
+  },
+  {
+    slug: "deskew",
+    name: "Deskew",
+    shortDescription: "Straighten crooked scanned pages.",
+    heroDescription: "Straighten crooked scanned pages.",
+    accent: "secondary",
+    category: "core",
+    icon: "rotate-pdf",
+    accept: "application/pdf",
+    guideIntro:
+      "A page scanned slightly crooked is easy to fix by eye — Gojli's Deskew tool lets you dial in the exact correction angle on a live preview, page by page.",
+    guideSteps: [
+      { title: "Upload your scanned PDF", description: "Choose the PDF with the crooked scanned page(s)." },
+      {
+        title: "Dial in the angle",
+        description: "Use the slider to rotate the preview until the page looks straight, on each page that needs it.",
+      },
+      {
+        title: "Download the straightened PDF",
+        description: "Gojli rotates each adjusted page by its exact angle and gives you a direct download link.",
+      },
+    ],
+    faqs: [
+      { question: "Does this detect the skew automatically?", answer: "No, there's no automatic crooked-scan detection — you dial in the angle by eye against a live preview." },
+      { question: "Does the page size change?", answer: "No, the page dimensions stay the same — only the content rotates within them." },
     ],
   },
 ];
