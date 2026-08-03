@@ -1310,7 +1310,13 @@ export function PdfEditorWorkspace() {
         } else if (el.type === "text-edit") {
           const editFont = getFont(el.fontFamily, el.isBold, el.isItalic);
           const descentPt = el.heightPt * (1 - ASCENT_RATIO);
-          const pad = 1.5;
+          const hPad = 1.5;
+          // Vertical padding scales with font size rather than staying a flat
+          // 1.5pt — see the matching comment on the on-screen mask above. Without
+          // this, larger replacement text could leave a sliver of the original
+          // glyphs' descenders visible past the mask in the saved PDF itself, not
+          // just in the live preview.
+          const vPad = Math.max(1.5, el.fontSizePt * 0.15);
           // Growth beyond originalWidthPt is measured as "how much wider is the
           // replacement than the original," both in the SAME (standard) font —
           // not "how wide is the replacement vs. originalWidthPt" directly,
@@ -1321,7 +1327,7 @@ export function PdfEditorWorkspace() {
           // font did, even with no actual edit.
           const newTextWidthPt = el.text.trim() ? editFont.widthOfTextAtSize(el.text, el.fontSizePt) : 0;
           const originalTextWidthPt = el.originalText.trim() ? editFont.widthOfTextAtSize(el.originalText, el.fontSizePt) : 0;
-          const maskWidth = el.originalWidthPt + Math.max(0, newTextWidthPt - originalTextWidthPt) + pad * 2;
+          const maskWidth = el.originalWidthPt + Math.max(0, newTextWidthPt - originalTextWidthPt) + hPad * 2;
           const [bgR, bgG, bgB] = hexToRgbFloat(el.bgColorHex);
 
           // Real editing of existing PDF text isn't possible without rewriting the
@@ -1329,10 +1335,10 @@ export function PdfEditorWorkspace() {
           // rectangle matching the sampled background, then draw the replacement on
           // top in a standard font picked to match the original's family.
           page.drawRectangle({
-            x: el.xPt - pad,
-            y: el.baselinePt - descentPt - pad,
+            x: el.xPt - hPad,
+            y: el.baselinePt - descentPt - vPad,
             width: maskWidth,
-            height: el.heightPt + pad * 2,
+            height: el.heightPt + vPad * 2,
             color: rgb(bgR, bgG, bgB),
           });
 
@@ -2142,6 +2148,15 @@ export function PdfEditorWorkspace() {
                     const currentTextWidthPt = measureTextWidthPt(el.text, el.fontSizePt, family, el.isBold);
                     const originalTextWidthPt = measureTextWidthPt(el.originalText, el.fontSizePt, family, el.isBold);
                     const maskWidthPt = el.originalWidthPt + Math.max(0, currentTextWidthPt - originalTextWidthPt);
+                    const hPad = 1.5;
+                    // Vertical padding scales with font size rather than staying a flat
+                    // 1.5pt — that fixed amount is fine slack at small sizes but barely
+                    // anything at large ones, and ASCENT_RATIO is one fixed guess applied
+                    // to every font. Whenever a font's real ascent/descent split runs even
+                    // slightly past that guess, a sliver of the original glyphs (usually
+                    // descenders) shows past the mask's bottom edge — worse the bigger the
+                    // text is, which is exactly the pattern reported.
+                    const vPad = Math.max(1.5, el.fontSizePt * 0.15);
                     return (
                     // The outer wrapper stays sized to el.widthPt — that's what
                     // gives the textarea inside enough room to render without
@@ -2154,16 +2169,16 @@ export function PdfEditorWorkspace() {
                       key={el.id}
                       className="group absolute"
                       style={{
-                        left: el.xPt * scale - 1.5 * scale,
-                        top: el.topPt * scale - 1.5 * scale,
-                        width: el.widthPt * scale + 3 * scale,
-                        height: el.heightPt * scale + 3 * scale,
+                        left: el.xPt * scale - hPad * scale,
+                        top: el.topPt * scale - vPad * scale,
+                        width: el.widthPt * scale + hPad * 2 * scale,
+                        height: el.heightPt * scale + vPad * 2 * scale,
                         pointerEvents: "auto",
                       }}
                     >
                       <div
                         className="absolute inset-y-0 left-0"
-                        style={{ width: maskWidthPt * scale + 3 * scale, backgroundColor: el.bgColorHex }}
+                        style={{ width: maskWidthPt * scale + hPad * 2 * scale, backgroundColor: el.bgColorHex }}
                       />
                       <button
                         type="button"
