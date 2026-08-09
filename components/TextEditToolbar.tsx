@@ -168,14 +168,14 @@ export function TextEditToolbar({
           onClick={() => setOpenMenu((current) => (current === "color" ? null : "color"))}
           className="btn btn-ghost btn-xs btn-square relative"
           title={`Text color (currently ${element.color})`}
-          style={{ color: element.color }}
         >
+          {/* The icon itself stays the theme's normal button color (inherited,
+              not tinted to element.color) — tinting it used to mean a black
+              text color rendered a black icon on this toolbar's own dark-mode
+              background, making it invisible. The swatch dot below is the
+              actual color indicator; it doesn't have that problem since its
+              border always contrasts against base-100. */}
           <ToolIcon name="palette" className="h-3.5 w-3.5" />
-          {/* A solid swatch, not just the icon's own stroke tint — for a
-              faint/light detected color (a common case for faded original
-              text), the thin icon outline barely showed the actual shade,
-              so it didn't read as "auto-selected" even though element.color
-              was already correct. */}
           <span
             className="absolute right-0 bottom-0 h-2 w-2 rounded-full border border-base-100"
             style={{ backgroundColor: element.color }}

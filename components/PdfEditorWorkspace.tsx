@@ -47,18 +47,24 @@ type ShapeType = "rectangle" | "circle" | "line";
 
 type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
-// 8 handles around a box — each keeps the *opposite* edge anchored while
-// dragging (see startElementResize), so resizing from any corner or edge
-// feels natural instead of the box always re-anchoring at its top-left.
-const RESIZE_HANDLES: { dir: ResizeHandle; position: string; cursor: string }[] = [
-  { dir: "nw", position: "-top-2 -left-2", cursor: "cursor-nwse-resize" },
-  { dir: "n", position: "-top-2 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
-  { dir: "ne", position: "-top-2 -right-2", cursor: "cursor-nesw-resize" },
-  { dir: "e", position: "top-1/2 -right-2 -translate-y-1/2", cursor: "cursor-ew-resize" },
-  { dir: "se", position: "-bottom-2 -right-2", cursor: "cursor-nwse-resize" },
-  { dir: "s", position: "-bottom-2 left-1/2 -translate-x-1/2", cursor: "cursor-ns-resize" },
-  { dir: "sw", position: "-bottom-2 -left-2", cursor: "cursor-nesw-resize" },
-  { dir: "w", position: "top-1/2 -left-2 -translate-y-1/2", cursor: "cursor-ew-resize" },
+// 8 invisible drag strips around a box's own border — each keeps the
+// *opposite* edge anchored while dragging (see startElementResize), so
+// resizing from any corner or edge feels natural instead of the box always
+// re-anchoring at its top-left. These used to be filled squares sitting well
+// outside the corners; at small font sizes the squares were bigger than the
+// text itself and the mid-edge ones sat right on top of the glyphs. Now
+// there's nothing to see — just a thin strip *on* the selection outline
+// (see the "selected" outline below) with the right cursor, running along
+// almost the whole edge rather than one small point in the middle.
+const RESIZE_HANDLES: { dir: ResizeHandle; className: string; cursor: string }[] = [
+  { dir: "nw", className: "-top-1 -left-1 h-3 w-3", cursor: "cursor-nwse-resize" },
+  { dir: "n", className: "-top-1 left-3 right-3 h-2", cursor: "cursor-ns-resize" },
+  { dir: "ne", className: "-top-1 -right-1 h-3 w-3", cursor: "cursor-nesw-resize" },
+  { dir: "e", className: "top-3 bottom-3 -right-1 w-2", cursor: "cursor-ew-resize" },
+  { dir: "se", className: "-bottom-1 -right-1 h-3 w-3", cursor: "cursor-nwse-resize" },
+  { dir: "s", className: "-bottom-1 left-3 right-3 h-2", cursor: "cursor-ns-resize" },
+  { dir: "sw", className: "-bottom-1 -left-1 h-3 w-3", cursor: "cursor-nesw-resize" },
+  { dir: "w", className: "top-3 bottom-3 -left-1 w-2", cursor: "cursor-ew-resize" },
 ];
 
 const shapeTypes: { id: ShapeType; icon: string; label: string }[] = [
@@ -92,7 +98,11 @@ const formFieldTypes: { id: "form-text" | "form-multiline" | "form-dropdown" | "
 // that and was one extra, unnecessary step. "draw" is excluded for the same
 // reason — pen color/thickness now live in their own popover (see the
 // "Annotate" dropdown), not a plain always-visible swatch row.
-const toolsWithColor = new Set<ToolId>(["text", "highlight", "stamp-x", "stamp-check", "stamp-dot"]);
+// "text" is deliberately excluded — its own floating TextEditToolbar (shown
+// once a box is placed/selected) already has a color picker, so this bar
+// showing one too was a duplicate the user has to dismiss twice.
+const toolsWithColor = new Set<ToolId>(["highlight", "stamp-x", "stamp-check", "stamp-dot"]);
+const DEFAULT_TEXT_FONT_SIZE_PT = 16;
 const CLICK_TO_ADD: ToolId[] = [
   "text",
   "shapes",
@@ -130,6 +140,15 @@ async function detectTextItems(
 ): Promise<DetectedTextItem[]> {
   const content = await page.getTextContent();
   const detected: DetectedTextItem[] = [];
+  // One readback for the whole page instead of one per text item — each
+  // ctx.getImageData() call forces a GPU-to-CPU pixel readback, and the two
+  // sampling functions below used to call it up to ~8 times *per item* (a
+  // few small band reads each). A text-heavy page with a few hundred items
+  // turned into a few thousand of these, which is what actually made
+  // importing a PDF feel slow — the page was already rendered and just
+  // waiting on this loop. Sampling now reads out of one cached pixel buffer.
+  const canvas = ctx.canvas;
+  const { data: pixels } = ctx.getImageData(0, 0, canvas.width, canvas.height);
   content.items.forEach((item, itemIndex) => {
     if (!("str" in item) || !item.str.trim()) return;
     const t = item.transform;
@@ -144,14 +163,18 @@ async function detectTextItems(
     const topPt = pageHeightPt - (baselinePt + fontSizePt * ASCENT_RATIO);
 
     const bgColorHex = sampleTextBackgroundColor(
-      ctx,
+      pixels,
+      canvas.width,
+      canvas.height,
       xPt * renderScale,
       topPt * renderScale,
       widthPt * renderScale,
       heightPt * renderScale,
     );
     const inkColorHex = sampleTextInkColor(
-      ctx,
+      pixels,
+      canvas.width,
+      canvas.height,
       xPt * renderScale,
       topPt * renderScale,
       widthPt * renderScale,
@@ -260,7 +283,6 @@ export function PdfEditorWorkspace() {
   // ink stamps) default to; still fully overridable via the toolbar's color
   // swatches for whichever tool is active.
   const [activeColorHex, setActiveColorHex] = useState<string>("#000000");
-  const [activeFontSizePt, setActiveFontSizePt] = useState(16);
   const [activePenStrokeWidthPt, setActivePenStrokeWidthPt] = useState(2);
   // The pen color/thickness submenu normally opens on :hover, which never
   // fires on touch — this lets a tap on its toggle open it too.
@@ -283,6 +305,25 @@ export function PdfEditorWorkspace() {
   const [toolbarPinned, setToolbarPinned] = useState(false);
   const [toolbarBounds, setToolbarBounds] = useState<{ left: number; width: number } | null>(null);
   const [toolbarHeight, setToolbarHeight] = useState(0);
+
+  // Any change to the elements — typing into a form field, moving/resizing
+  // something, adding or deleting an annotation — invalidates whatever was
+  // last saved. Without this, a successful save replaces the "Save PDF"
+  // button with a "Download" link bound to that specific blob; if the user
+  // keeps editing afterward (as the flow naturally encourages — nothing else
+  // prompts a re-save) and then clicks that same Download link, they silently
+  // get the older snapshot with none of the edits made after the last save.
+  useEffect(() => {
+    if (status !== "done") return;
+    setDownloadUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    setStatus("idle");
+    // Intentionally only watches `elements` — viewport/zoom/page-navigation
+    // state doesn't affect what would be saved, so it shouldn't force a re-save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elements]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -667,7 +708,7 @@ export function PdfEditorWorkspace() {
         widthPt: 200,
         text: "Text",
         color: activeColorHex,
-        fontSizePt: activeFontSizePt,
+        fontSizePt: DEFAULT_TEXT_FONT_SIZE_PT,
         fontFamily: "sans-serif",
         isBold: false,
         isItalic: false,
@@ -905,6 +946,18 @@ export function PdfEditorWorkspace() {
 
     pushHistory();
 
+    // Pointer capture pins this drag's move/up events to the handle itself
+    // for the rest of the gesture — without it, a release that happens while
+    // the cursor has drifted off the (now very thin) handle strip, or onto a
+    // different element mid-drag, can fail to reach the cleanup below, and
+    // the resize never gets the pointerup that's supposed to stop it. Font-
+    // size dragging in particular covers a lot of vertical distance, so it's
+    // easy for the cursor to end up somewhere else by the time the button
+    // comes up.
+    const handleEl = event.currentTarget;
+    const pointerId = event.pointerId;
+    handleEl.setPointerCapture(pointerId);
+
     const startX = event.clientX;
     const startY = event.clientY;
     const startWidth = el.widthPt;
@@ -913,17 +966,68 @@ export function PdfEditorWorkspace() {
     const isText = el.type === "text";
     const startHeight = !isText ? el.heightPt : 0;
     const startFontSize = isText ? el.fontSizePt : 0;
+    const textValue = isText ? el.text : "";
+    const textFamily = isText ? (el.fontFamily as FontFamilyGuess) : "sans-serif";
+    const textIsBold = isText ? el.isBold : false;
 
     function onMove(moveEvent: PointerEvent) {
       const dxPt = (moveEvent.clientX - startX) / scale;
       const dyPt = (moveEvent.clientY - startY) / scale;
 
       if (isText) {
-        // For text, resizing controls font size (what users actually expect)
-        // rather than just the wrap width of the invisible text box.
-        const newFontSize = Math.max(8, Math.min(160, startFontSize + dyPt));
+        const east = handle === "e" || handle === "ne" || handle === "se";
+        const west = handle === "w" || handle === "nw" || handle === "sw";
+
+        // The pure left/right handles (no north/south component) only change
+        // how wide the box is — same as any other element's width handle —
+        // so the text rewraps within it instead of the font size changing.
+        // Tying every handle to font size (the previous behavior) meant
+        // dragging the right edge alone also grew the text vertically, and
+        // shrinking the oversized 200pt-wide default box down to fit a short
+        // "Text" placeholder via that same handle read as a huge negative
+        // font-size delta — it went tiny almost immediately.
+        if (handle === "e" || handle === "w") {
+          if (east) {
+            updateElement(el.id, { widthPt: Math.max(20, startWidth + dxPt) });
+          } else {
+            const newWidth = Math.max(20, startWidth - dxPt);
+            updateElement(el.id, { widthPt: newWidth, xPt: startXPt + (startWidth - newWidth) });
+          }
+          return;
+        }
+
+        // n / s / and the corners: resizing controls font size (what users
+        // actually expect for those) rather than just the wrap width. Only
+        // the vertical component drives it.
+        const south = handle === "s" || handle === "se" || handle === "sw";
+        const north = handle === "n" || handle === "ne" || handle === "nw";
+        const isCorner = handle === "ne" || handle === "nw" || handle === "se" || handle === "sw";
+        // 1pt of font size per 1pt of drag (screen-pixel-smooth, since the
+        // rendered size is fontSizePt*scale) tracked the cursor exactly, but
+        // "exactly" reads as "way too sensitive" for something as coarse as
+        // font size — a small, easy-to-overshoot movement swung it by a lot.
+        // Slowing it down trades 1:1 tracking for something easier to land on
+        // a specific size with.
+        const FONT_RESIZE_SENSITIVITY = 0.4;
+        const delta = (south ? dyPt : north ? -dyPt : 0) * FONT_RESIZE_SENSITIVITY;
+
+        const newFontSize = Math.max(8, Math.min(160, startFontSize + delta));
         const ratio = newFontSize / startFontSize;
-        updateElement(el.id, { fontSizePt: newFontSize, widthPt: Math.max(20, startWidth * ratio) });
+        const naturalWidthPt = measureTextWidthPt(textValue, newFontSize, textFamily, textIsBold);
+        // Corners grow the box diagonally — width scales right along with the
+        // font, same as before. Plain n/s handles are meant to grow "just
+        // downward/upward," so width is left alone entirely unless the text
+        // at the new font size would no longer fit and wrap — that's the one
+        // case width still has to move for a n/s-only drag.
+        const newWidth = isCorner
+          ? Math.max(20, startWidth * ratio, naturalWidthPt + 4)
+          : Math.max(startWidth, naturalWidthPt + 4);
+        const patch: Partial<EditorElement> = { fontSizePt: newFontSize, widthPt: newWidth };
+        // Only xPt gets anchor-adjusted (for the left-side handles) — text
+        // boxes have no stored heightPt (height just follows the content), so
+        // there's no yPt equivalent to keep the bottom edge from drifting.
+        if (west) patch.xPt = startXPt + (startWidth - newWidth);
+        updateElement(el.id, patch);
         return;
       }
 
@@ -950,6 +1054,7 @@ export function PdfEditorWorkspace() {
       updateElement(el.id, patch as Partial<EditorElement>);
     }
     function onUp() {
+      handleEl.releasePointerCapture(pointerId);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     }
@@ -1822,21 +1927,12 @@ export function PdfEditorWorkspace() {
           </button>
         </div>
 
-        {activeTool === "text" && (
-          <label className="flex items-center gap-1.5 border-l border-base-300 pl-2 text-xs text-base-content/60">
-            Size
-            <input
-              type="number"
-              min={8}
-              max={160}
-              value={activeFontSizePt}
-              onChange={(event) => setActiveFontSizePt(Number(event.target.value) || 16)}
-              className="input input-bordered input-xs w-14"
-              aria-label="Text font size"
-            />
-          </label>
-        )}
-
+        {/* Text has no size/color controls here at all, even before a box is
+            placed — the floating TextEditToolbar that appears the moment you
+            click into a text box (new or existing) already covers size,
+            color, font, bold/italic, so this bar showing the same thing too
+            was a pure duplicate. New text just starts at a fixed default and
+            gets adjusted there. */}
         {toolsWithColor.has(activeTool) && (
           <div className="flex items-center gap-1.5 border-l border-base-300 pl-2">
             {colorSwatches.map((swatch) => (
@@ -2258,7 +2354,14 @@ export function PdfEditorWorkspace() {
                         setSelectedElementId(el.id);
                         startElementDrag(el, event);
                       }}
-                      className="group absolute"
+                      // outline (not border) so the selection indicator never
+                      // shifts the box's own content by a pixel — it draws
+                      // outside the box entirely. This thin line is also all
+                      // that's left to grab for resizing now that the old
+                      // filled-square handles are gone.
+                      className={`group absolute ${
+                        el.id === selectedElementId ? "outline-1 outline-primary outline-offset-2" : ""
+                      }`}
                       style={{
                         left: el.xPt * scale,
                         top: el.yPt * scale,
@@ -2275,7 +2378,11 @@ export function PdfEditorWorkspace() {
                           event.stopPropagation();
                           removeElement(el.id);
                         }}
-                        className="absolute -right-2 -top-2 z-10 hidden h-5 w-5 items-center justify-center rounded-full bg-error text-white group-hover:flex"
+                        // z-20, one above the resize handles below — this button and the
+                        // "ne" corner handle sit in the same top-right corner, and with
+                        // matching z-index the one later in the DOM (the handle) was
+                        // winning every overlapping click, so Delete never fired there.
+                        className="absolute -right-2 -top-2 z-20 hidden h-5 w-5 items-center justify-center rounded-full bg-error text-white group-hover:flex"
                         aria-label="Delete"
                       >
                         <ToolIcon name="close" className="h-3 w-3" />
@@ -2283,8 +2390,26 @@ export function PdfEditorWorkspace() {
 
                       {el.type === "text" && (
                         <textarea
+                          // rows={1} pins the textarea to exactly one line's height, so
+                          // once the text wraps (or a newline is typed) the *fixed* box no
+                          // longer fits its own content and the browser's default
+                          // overflow:auto kicks in as a scrollbar instead of the box
+                          // growing. A plain callback ref re-runs on every render (a new
+                          // inline function is a new ref identity, so React detaches and
+                          // re-attaches it each time) — cheaper than wiring a per-element
+                          // useEffect just to resync height after every text/font-size
+                          // change, and this needs to happen after every one of them.
+                          ref={(node) => {
+                            if (!node) return;
+                            node.style.height = "auto";
+                            node.style.height = `${node.scrollHeight}px`;
+                          }}
                           value={el.text}
-                          onChange={(event) => updateElement(el.id, { text: event.target.value })}
+                          onChange={(event) => {
+                            updateElement(el.id, { text: event.target.value });
+                            event.target.style.height = "auto";
+                            event.target.style.height = `${event.target.scrollHeight}px`;
+                          }}
                           onFocus={() => {
                             pushHistory();
                             setSelectedElementId(el.id);
@@ -2318,7 +2443,13 @@ export function PdfEditorWorkspace() {
                             window.addEventListener("pointermove", onMove);
                             window.addEventListener("pointerup", onUp);
                           }}
-                          className="w-full cursor-move resize-none border border-dashed border-transparent bg-transparent leading-tight outline-none hover:border-base-content/20 focus:cursor-text"
+                          // A plain <textarea> defaults to rows="2" when no rows prop is
+                          // given — for one line of text that left a whole second blank
+                          // line's worth of box below it. rows={1} plus this minHeight is
+                          // the actual single-line height; the box only grows taller than
+                          // that once the text truly wraps or a newline is typed.
+                          rows={1}
+                          className="w-full cursor-move resize-none overflow-hidden border border-dashed border-transparent bg-transparent leading-tight outline-none hover:border-base-content/20 focus:cursor-text"
                           style={{
                             color: el.color,
                             fontSize: el.fontSizePt * scale,
@@ -2471,28 +2602,24 @@ export function PdfEditorWorkspace() {
                         </div>
                       )}
 
-                      {el.type === "text" ? (
+                      {/* Text used to only get the bottom-right handle — every other
+                          drag target simply did nothing, which is what made resizing
+                          feel broken. All 8 now feed startElementResize the same way
+                          the other element types' handles already did — and none of
+                          them are drawn anymore; they're invisible strips right on the
+                          selection outline below, so there's no fat square sitting on
+                          top of (and hiding) small text. */}
+                      {RESIZE_HANDLES.map((h) => (
                         <div
-                          onPointerDown={(event) => startElementResize(el, event)}
-                          title="Drag to resize text"
+                          key={h.dir}
+                          onPointerDown={(event) => startElementResize(el, event, h.dir)}
+                          title={el.type === "text" ? "Drag to resize text" : "Drag to resize"}
                           style={{ touchAction: "none" }}
-                          className={`absolute -bottom-2 -right-2 z-10 h-4 w-4 cursor-nwse-resize rounded-sm border border-white bg-primary ${
+                          className={`absolute z-10 ${h.className} ${h.cursor} ${
                             el.id === selectedElementId ? "block" : "hidden group-hover:block"
                           }`}
                         />
-                      ) : (
-                        RESIZE_HANDLES.map((h) => (
-                          <div
-                            key={h.dir}
-                            onPointerDown={(event) => startElementResize(el, event, h.dir)}
-                            title="Drag to resize"
-                            style={{ touchAction: "none" }}
-                            className={`absolute z-10 h-4 w-4 rounded-sm border border-white bg-primary ${h.position} ${h.cursor} ${
-                              el.id === selectedElementId ? "block" : "hidden group-hover:block"
-                            }`}
-                          />
-                        ))
-                      )}
+                      ))}
                     </div>
                   ))}
 

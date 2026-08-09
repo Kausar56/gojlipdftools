@@ -17,7 +17,14 @@ export function useSupabaseUser(): User | null | undefined {
       return;
     }
 
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    // No .catch() here left a network hiccup (Supabase unreachable) as an
+    // unhandled rejection, with `user` stuck at `undefined` forever — any UI
+    // gated on "still checking" vs. "logged out" (e.g. the nav's user menu)
+    // would hang indefinitely instead of just falling back to logged-out.
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setUser(data.user))
+      .catch(() => setUser(null));
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);

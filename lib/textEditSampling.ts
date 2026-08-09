@@ -1,3 +1,29 @@
+/** Copies a rectangular sub-region out of a full-page pixel buffer — the
+ *  in-memory equivalent of ctx.getImageData(x, y, w, h), but without another
+ *  GPU readback (the buffer is already read back once, up front). */
+function readBandFromBuffer(
+  data: Uint8ClampedArray,
+  canvasWidth: number,
+  canvasHeight: number,
+  xPx: number,
+  yPx: number,
+  wPx: number,
+  hPx: number,
+): Uint8ClampedArray | null {
+  const bx = Math.max(0, Math.round(xPx));
+  const by = Math.max(0, Math.round(yPx));
+  const bw = Math.max(1, Math.min(Math.round(wPx), canvasWidth - bx));
+  const bh = Math.max(1, Math.min(Math.round(hPx), canvasHeight - by));
+  if (bw <= 0 || bh <= 0 || bx >= canvasWidth || by + bh > canvasHeight) return null;
+
+  const out = new Uint8ClampedArray(bw * bh * 4);
+  for (let row = 0; row < bh; row++) {
+    const srcStart = ((by + row) * canvasWidth + bx) * 4;
+    out.set(data.subarray(srcStart, srcStart + bw * 4), row * bw * 4);
+  }
+  return out;
+}
+
 function rgbToHex(r: number, g: number, b: number): string {
   const clamp = (n: number) => Math.min(255, Math.max(0, Math.round(n)));
   return `#${[clamp(r), clamp(g), clamp(b)].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
@@ -61,29 +87,20 @@ function dominantColorHex(data: Uint8ClampedArray): string | null {
  * wins regardless of which individual region it came from.
  */
 export function sampleTextBackgroundColor(
-  ctx: CanvasRenderingContext2D,
+  pixels: Uint8ClampedArray,
+  canvasWidth: number,
+  canvasHeight: number,
   boxXPx: number,
   boxYPx: number,
   boxWidthPx: number,
   boxHeightPx: number,
 ): string {
-  const canvas = ctx.canvas;
   const x = Math.max(0, Math.round(boxXPx));
-  const w = Math.max(1, Math.min(Math.round(boxWidthPx), canvas.width - x));
+  const w = Math.max(1, Math.min(Math.round(boxWidthPx), canvasWidth - x));
   if (w <= 0) return "#ffffff";
 
-  const readBand = (xPx: number, yPx: number, wPx: number, hPx: number): Uint8ClampedArray | null => {
-    const bx = Math.max(0, Math.round(xPx));
-    const by = Math.max(0, Math.round(yPx));
-    const bw = Math.max(1, Math.min(Math.round(wPx), canvas.width - bx));
-    const bh = Math.max(1, Math.min(Math.round(hPx), canvas.height - by));
-    if (bw <= 0 || bh <= 0 || by + bh > canvas.height) return null;
-    try {
-      return ctx.getImageData(bx, by, bw, bh).data;
-    } catch {
-      return null;
-    }
-  };
+  const readBand = (xPx: number, yPx: number, wPx: number, hPx: number): Uint8ClampedArray | null =>
+    readBandFromBuffer(pixels, canvasWidth, canvasHeight, xPx, yPx, wPx, hPx);
 
   const corner = Math.max(2, Math.min(4, Math.round(boxHeightPx / 3)));
 
@@ -146,26 +163,21 @@ function hexToInts(hex: string): [number, number, number] {
  * getReadableTextColor(bgHex) in that case.
  */
 export function sampleTextInkColor(
-  ctx: CanvasRenderingContext2D,
+  pixels: Uint8ClampedArray,
+  canvasWidth: number,
+  canvasHeight: number,
   boxXPx: number,
   boxYPx: number,
   boxWidthPx: number,
   boxHeightPx: number,
   bgHex: string,
 ): string | null {
-  const canvas = ctx.canvas;
-  const x = Math.max(0, Math.round(boxXPx));
-  const y = Math.max(0, Math.round(boxYPx));
-  const w = Math.max(1, Math.min(Math.round(boxWidthPx), canvas.width - x));
-  const h = Math.max(1, Math.min(Math.round(boxHeightPx), canvas.height - y));
+  const w = Math.max(1, Math.min(Math.round(boxWidthPx), canvasWidth - Math.max(0, Math.round(boxXPx))));
+  const h = Math.max(1, Math.min(Math.round(boxHeightPx), canvasHeight - Math.max(0, Math.round(boxYPx))));
   if (w <= 0 || h <= 0) return null;
 
-  let data: Uint8ClampedArray;
-  try {
-    data = ctx.getImageData(x, y, w, h).data;
-  } catch {
-    return null;
-  }
+  const data = readBandFromBuffer(pixels, canvasWidth, canvasHeight, boxXPx, boxYPx, boxWidthPx, boxHeightPx);
+  if (!data) return null;
 
   const [bgR, bgG, bgB] = hexToInts(bgHex);
   const totalPixels = w * h;
