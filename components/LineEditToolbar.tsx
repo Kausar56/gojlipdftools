@@ -6,7 +6,10 @@ import type { EditorElement } from "@/lib/editorElements";
 import { ToolIcon } from "./icons";
 import { NativeColorInput } from "./NativeColorInput";
 
-type LineElement = Extract<EditorElement, { type: "line" }>;
+// Line and arrow share the exact same shape (two endpoints, color, thickness) —
+// arrow just adds a fixed arrowhead drawn from those same fields — so one
+// toolbar serves both instead of a near-duplicate ArrowEditToolbar.
+type LineElement = Extract<EditorElement, { type: "line" | "arrow" }>;
 
 export function LineEditToolbar({
   element,

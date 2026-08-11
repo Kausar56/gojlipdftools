@@ -9,6 +9,8 @@ import { DropdownEditToolbar } from "./DropdownEditToolbar";
 import { FormTextEditToolbar } from "./FormTextEditToolbar";
 import { SignatureMenu } from "./SignatureMenu";
 import { ImageEditToolbar } from "./ImageEditToolbar";
+import { CheckboxEditToolbar } from "./CheckboxEditToolbar";
+import { RadioEditToolbar } from "./RadioEditToolbar";
 import { SignaturePad } from "./SignaturePad";
 import { SaveSuccessModal } from "./SaveSuccessModal";
 import { FindReplacePanel } from "./FindReplacePanel";
@@ -48,7 +50,7 @@ type ToolId =
   | "highlight"
   | "shapes"
   | "erase";
-type ShapeType = "rectangle" | "circle" | "line";
+type ShapeType = "rectangle" | "circle" | "line" | "arrow";
 
 type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 
@@ -76,7 +78,21 @@ const shapeTypes: { id: ShapeType; icon: string; label: string }[] = [
   { id: "rectangle", icon: "shape-rect", label: "Rectangle" },
   { id: "circle", icon: "shape-circle", label: "Circle" },
   { id: "line", icon: "shape-line", label: "Line" },
+  { id: "arrow", icon: "shape-arrow", label: "Arrow" },
 ];
+
+// Two open "wing" segments pulled back from the tip (x2,y2), at a fixed
+// spread angle from the shaft direction — an open "V" arrowhead rather than a
+// filled triangle, since pdf-lib has no simple filled-polygon primitive and
+// this way the on-screen preview and the saved PDF use the exact same shape.
+function arrowHeadWings(x1: number, y1: number, x2: number, y2: number, length: number): [[number, number], [number, number]] {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const spread = Math.PI / 7;
+  return [
+    [x2 - length * Math.cos(angle - spread), y2 - length * Math.sin(angle - spread)],
+    [x2 - length * Math.cos(angle + spread), y2 - length * Math.sin(angle + spread)],
+  ];
+}
 
 const annotateTypes: { id: "draw" | "highlight"; icon: string; label: string }[] = [
   { id: "draw", icon: "pen", label: "Pen" },
@@ -113,7 +129,6 @@ const CLICK_TO_ADD: ToolId[] = [
   "shapes",
   "highlight",
   "link",
-  "whiteout",
   "stamp-x",
   "stamp-check",
   "stamp-dot",
@@ -243,7 +258,13 @@ async function renderAndDetectPage(
   canvas.height = viewport.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) return [];
-  const renderTask = page.render({ canvas, canvasContext: ctx, viewport });
+  // annotationMode: 0 (disabled) — pdf.js's default rendering bakes form
+  // field widgets' *current appearance* (their existing value, border, etc.)
+  // onto the canvas as flat pixels. Every field this app cares about is
+  // handled entirely by its own React overlay instead, so leaving that on
+  // just means the original value's pixels sit permanently underneath
+  // whatever the overlay shows, with no way for editing it to "remove" them.
+  const renderTask = page.render({ canvas, canvasContext: ctx, viewport, annotationMode: 0 });
   await renderTask.promise;
   return detectTextItems(page, ctx, baseViewport.height, OFFSCREEN_RENDER_SCALE);
 }
@@ -293,7 +314,10 @@ async function detectExistingFormFields(pdfDoc: import("pdfjs-dist").PDFDocument
       offscreenCanvas.height = offscreenViewport.height;
       const offscreenCtx = offscreenCanvas.getContext("2d");
       if (offscreenCtx) {
-        await page.render({ canvas: offscreenCanvas, canvasContext: offscreenCtx, viewport: offscreenViewport }).promise;
+        // annotationMode: 0 — sampling the *true* page background behind a
+        // field, not the field's own already-baked-in value/appearance.
+        await page.render({ canvas: offscreenCanvas, canvasContext: offscreenCtx, viewport: offscreenViewport, annotationMode: 0 })
+          .promise;
         pixels = offscreenCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height).data;
         pixelsWidth = offscreenCanvas.width;
         pixelsHeight = offscreenCanvas.height;
@@ -407,6 +431,7 @@ export function PdfEditorWorkspace() {
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [drawingPath, setDrawingPath] = useState<Point[] | null>(null);
   const [lineDraft, setLineDraft] = useState<{ start: Point; current: Point } | null>(null);
+  const [whiteoutDraft, setWhiteoutDraft] = useState<{ start: Point; current: Point } | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   // Cached so re-clicking "Sign" later can offer to reuse it instead of
   // always reopening a blank drawing pad — see SignatureMenu.
@@ -537,7 +562,11 @@ export function PdfEditorWorkspace() {
       // pdf.js doesn't guard against that itself, and the result is corrupted,
       // half-drawn pixels. Cancel whatever's in flight before starting a new one.
       renderTaskRef.current?.cancel();
-      const renderTask = page.render({ canvas, canvasContext: ctx, viewport });
+      // annotationMode: 0 — see detectExistingFormFields for why: without
+      // this, an existing form field's current value gets baked into these
+      // very pixels by pdf.js itself, sitting permanently underneath the
+      // editable overlay this app draws for that same field.
+      const renderTask = page.render({ canvas, canvasContext: ctx, viewport, annotationMode: 0 });
       renderTaskRef.current = renderTask;
       try {
         await renderTask.promise;
@@ -710,6 +739,43 @@ export function PdfEditorWorkspace() {
     setSelectedElementId((current) => (current === id ? null : current));
   }
 
+  /** Picking one radio option clears "selected" on every other option that
+   *  shares its group name — a real radio group only ever has one selection,
+   *  and each option here is its own independent EditorElement rather than
+   *  something a single updateElement() call could enforce that for. */
+  function selectRadioOption(picked: Extract<EditorElement, { type: "form-radio" }>) {
+    pushHistory();
+    setSelectedElementId(picked.id);
+    setElements((prev) =>
+      prev.map((el) =>
+        el.type === "form-radio" && el.groupName.trim() === picked.groupName.trim()
+          ? { ...el, selectedByDefault: el.id === picked.id }
+          : el,
+      ),
+    );
+  }
+
+  /** "Delete" on a form-text field auto-detected from the uploaded PDF can't
+   *  actually delete the field — it's a real field in the source document,
+   *  and this element is just this app's editable overlay for it. Removing
+   *  that overlay (as a normal removeElement() would) left nothing on the
+   *  page to click back into — with the field's own baked-in appearance
+   *  also now disabled (see the annotationMode: 0 fix), that spot went
+   *  completely blank and unrecoverable except via Undo. Clearing the value
+   *  instead keeps the overlay (and the ability to click back into it and
+   *  type something new) while still doing what "remove this text" means
+   *  for a real field: emptying it. A field the user drew themselves has no
+   *  such original to preserve, so it still deletes outright. */
+  function clearOrRemoveFormTextElement(el: Extract<EditorElement, { type: "form-text" }>) {
+    if (el.isExisting) {
+      pushHistory();
+      updateElement(el.id, { defaultValue: "" });
+      setSelectedElementId(null);
+    } else {
+      removeElement(el.id);
+    }
+  }
+
   // Scoped to "text" elements specifically — text-edit elements are tied to a
   // specific spot in the original document (itemIndex/baseline), so "duplicating"
   // one wouldn't have a sensible meaning the way copying a text box you added does.
@@ -727,7 +793,7 @@ export function PdfEditorWorkspace() {
     setSelectedElementId(id);
   }
 
-  function duplicateLineElement(el: Extract<EditorElement, { type: "line" }>) {
+  function duplicateLineElement(el: Extract<EditorElement, { type: "line" | "arrow" }>) {
     const id = createElementId();
     pushHistory();
     setElements((prev) => [
@@ -775,6 +841,38 @@ export function PdfEditorWorkspace() {
     const id = createElementId();
     pushHistory();
     setElements((prev) => [...prev, { ...el, id, xPt: el.xPt + 12, yPt: el.yPt + 12 }]);
+    setSelectedElementId(id);
+  }
+
+  function duplicateCheckboxElement(el: Extract<EditorElement, { type: "form-checkbox" }>) {
+    const id = createElementId();
+    pushHistory();
+    // Fresh fieldName — pdf-lib fields must be uniquely named.
+    setElements((prev) => [
+      ...prev,
+      { ...el, id, xPt: el.xPt + 12, yPt: el.yPt + 12, fieldName: `Checkbox_${createElementId()}` },
+    ]);
+    setSelectedElementId(id);
+  }
+
+  function duplicateRadioElement(el: Extract<EditorElement, { type: "form-radio" }>) {
+    const id = createElementId();
+    pushHistory();
+    // Same group by default (another option in the same choice), with a
+    // fresh option label so it doesn't collide with the one it was copied
+    // from, and never pre-selected (only one option in a group should start
+    // selected, and the original already has that role if it had it).
+    setElements((prev) => [
+      ...prev,
+      {
+        ...el,
+        id,
+        xPt: el.xPt + 12,
+        yPt: el.yPt + 12,
+        optionLabel: `${el.optionLabel} copy`,
+        selectedByDefault: false,
+      },
+    ]);
     setSelectedElementId(id);
   }
 
@@ -908,8 +1006,13 @@ export function PdfEditorWorkspace() {
       return;
     }
 
-    if (activeTool === "shapes" && shapeType === "line") {
+    if (activeTool === "shapes" && (shapeType === "line" || shapeType === "arrow")) {
       setLineDraft({ start: point, current: point });
+      return;
+    }
+
+    if (activeTool === "whiteout") {
+      setWhiteoutDraft({ start: point, current: point });
       return;
     }
 
@@ -968,16 +1071,6 @@ export function PdfEditorWorkspace() {
         widthPt: 120,
         heightPt: 24,
         url: "",
-      });
-    } else if (activeTool === "whiteout") {
-      addElement({
-        id: createElementId(),
-        pageIndex: currentPage,
-        type: "whiteout",
-        xPt: point.x - 75,
-        yPt: point.y - 15,
-        widthPt: 150,
-        heightPt: 30,
       });
     } else if (activeTool === "form-text") {
       const xPt = point.x - 75;
@@ -1049,27 +1142,43 @@ export function PdfEditorWorkspace() {
         required: false,
       });
     } else if (activeTool === "form-radio") {
+      const xPt = point.x - 10;
+      const yPt = point.y - 10;
+      const widthPt = 20;
+      const heightPt = 20;
       addElement({
         id: createElementId(),
         pageIndex: currentPage,
         type: "form-radio",
-        xPt: point.x - 60,
-        yPt: point.y - 10,
-        widthPt: 120,
-        heightPt: 20,
+        xPt,
+        yPt,
+        widthPt,
+        heightPt,
         groupName: "RadioGroup1",
         optionLabel: `Option ${elements.filter((el) => el.type === "form-radio").length + 1}`,
+        selectedByDefault: false,
+        textColor: readableFormTextColorAt(xPt, yPt, widthPt, heightPt),
+        borderColor: "#000000",
+        required: false,
       });
     } else if (activeTool === "form-checkbox") {
+      const xPt = point.x - 9;
+      const yPt = point.y - 9;
+      const widthPt = 18;
+      const heightPt = 18;
       addElement({
         id: createElementId(),
         pageIndex: currentPage,
         type: "form-checkbox",
-        xPt: point.x - 9,
-        yPt: point.y - 9,
-        widthPt: 18,
-        heightPt: 18,
+        xPt,
+        yPt,
+        widthPt,
+        heightPt,
         fieldName: `Checkbox_${createElementId()}`,
+        checked: false,
+        textColor: readableFormTextColorAt(xPt, yPt, widthPt, heightPt),
+        borderColor: "#000000",
+        required: false,
       });
     } else if (activeTool === "stamp-x" || activeTool === "stamp-check" || activeTool === "stamp-dot") {
       addElement({
@@ -1089,8 +1198,10 @@ export function PdfEditorWorkspace() {
   function handleOverlayPointerMove(event: React.PointerEvent) {
     if (activeTool === "draw" && drawingPath) {
       setDrawingPath((prev) => (prev ? [...prev, toPagePoint(event)] : prev));
-    } else if (activeTool === "shapes" && shapeType === "line" && lineDraft) {
+    } else if (activeTool === "shapes" && (shapeType === "line" || shapeType === "arrow") && lineDraft) {
       setLineDraft((prev) => (prev ? { ...prev, current: toPagePoint(event) } : prev));
+    } else if (activeTool === "whiteout" && whiteoutDraft) {
+      setWhiteoutDraft((prev) => (prev ? { ...prev, current: toPagePoint(event) } : prev));
     }
   }
 
@@ -1105,14 +1216,14 @@ export function PdfEditorWorkspace() {
         strokeWidthPt: activePenStrokeWidthPt,
       });
     }
-    if (activeTool === "shapes" && shapeType === "line" && lineDraft) {
+    if (activeTool === "shapes" && (shapeType === "line" || shapeType === "arrow") && lineDraft) {
       const { start, current } = lineDraft;
       if (Math.hypot(current.x - start.x, current.y - start.y) > 2) {
         const id = createElementId();
         addElement({
           id,
           pageIndex: currentPage,
-          type: "line",
+          type: shapeType === "arrow" ? "arrow" : "line",
           x1Pt: start.x,
           y1Pt: start.y,
           x2Pt: current.x,
@@ -1123,8 +1234,30 @@ export function PdfEditorWorkspace() {
         setSelectedElementId(id);
       }
     }
+    if (activeTool === "whiteout" && whiteoutDraft) {
+      const { start, current } = whiteoutDraft;
+      const widthPt = Math.abs(current.x - start.x);
+      const heightPt = Math.abs(current.y - start.y);
+      const id = createElementId();
+      // A real drag draws exactly that rectangle; a plain click (no
+      // meaningful drag distance) falls back to a sensible default size
+      // centered on the click, instead of forcing every whiteout to be
+      // drawn out by hand.
+      const usedDrag = widthPt > 4 || heightPt > 4;
+      addElement({
+        id,
+        pageIndex: currentPage,
+        type: "whiteout",
+        xPt: usedDrag ? Math.min(start.x, current.x) : start.x - 75,
+        yPt: usedDrag ? Math.min(start.y, current.y) : start.y - 15,
+        widthPt: usedDrag ? widthPt : 150,
+        heightPt: usedDrag ? heightPt : 30,
+      });
+      setSelectedElementId(id);
+    }
     setDrawingPath(null);
     setLineDraft(null);
+    setWhiteoutDraft(null);
   }
 
   function startElementDrag(el: EditorElement, event: React.PointerEvent) {
@@ -1133,7 +1266,7 @@ export function PdfEditorWorkspace() {
       removeElement(el.id);
       return;
     }
-    if (el.type === "path" || el.type === "text-edit" || el.type === "line") return;
+    if (el.type === "path" || el.type === "text-edit" || el.type === "line" || el.type === "arrow") return;
 
     pushHistory();
 
@@ -1155,7 +1288,7 @@ export function PdfEditorWorkspace() {
     window.addEventListener("pointerup", onUp);
   }
 
-  function startLineDrag(el: Extract<EditorElement, { type: "line" }>, event: React.PointerEvent) {
+  function startLineDrag(el: Extract<EditorElement, { type: "line" | "arrow" }>, event: React.PointerEvent) {
     event.stopPropagation();
     setSelectedElementId(el.id);
     if (activeTool === "erase") {
@@ -1193,7 +1326,7 @@ export function PdfEditorWorkspace() {
   // to-move is left on the canvas for text.
   function startElementResize(el: EditorElement, event: React.PointerEvent, handle: ResizeHandle = "se") {
     event.stopPropagation();
-    if (el.type === "path" || el.type === "text-edit" || el.type === "line" || el.type === "text") return;
+    if (el.type === "path" || el.type === "text-edit" || el.type === "line" || el.type === "arrow" || el.type === "text") return;
 
     pushHistory();
 
@@ -1477,6 +1610,11 @@ export function PdfEditorWorkspace() {
         }
         return group;
       };
+      // select() validates the option against the group's already-added
+      // options, so it can only run once every "form-radio" element (which
+      // might land anywhere in this loop, for any group) has had its option
+      // added — collected here and applied in one pass after the loop below.
+      const pendingRadioSelections = new Map<string, string>();
 
       for (const el of elements) {
         const page = doc.getPage(el.pageIndex);
@@ -1533,6 +1671,14 @@ export function PdfEditorWorkspace() {
             thickness: el.strokeWidthPt,
             color: rgb(r, g, b),
           });
+        } else if (el.type === "arrow") {
+          const start = { x: el.x1Pt, y: pageHeightPt - el.y1Pt };
+          const end = { x: el.x2Pt, y: pageHeightPt - el.y2Pt };
+          page.drawLine({ start, end, thickness: el.strokeWidthPt, color: rgb(r, g, b) });
+          const headLen = Math.max(8, el.strokeWidthPt * 4);
+          for (const [wx, wy] of arrowHeadWings(start.x, start.y, end.x, end.y, headLen)) {
+            page.drawLine({ start: end, end: { x: wx, y: wy }, thickness: el.strokeWidthPt, color: rgb(r, g, b) });
+          }
         } else if (el.type === "link") {
           if (!el.url.trim()) continue;
           const uriAction = doc.context.obj({
@@ -1626,21 +1772,37 @@ export function PdfEditorWorkspace() {
           field.setFontSize(el.fontSizePt);
         } else if (el.type === "form-radio") {
           if (!el.groupName.trim() || !el.optionLabel.trim()) continue;
-          ensureRadioGroup(el.groupName.trim()).addOptionToPage(el.optionLabel.trim(), page, {
+          const groupName = el.groupName.trim();
+          const optionLabel = el.optionLabel.trim();
+          const [radioTextR, radioTextG, radioTextB] = hexToRgbFloat(el.textColor);
+          const [radioBorderR, radioBorderG, radioBorderB] = hexToRgbFloat(el.borderColor);
+          const radioGroup = ensureRadioGroup(groupName);
+          radioGroup.addOptionToPage(optionLabel, page, {
             x: el.xPt,
             y: pageHeightPt - el.yPt - el.heightPt,
             width: el.widthPt,
             height: el.heightPt,
+            textColor: rgb(radioTextR, radioTextG, radioTextB),
+            borderColor: rgb(radioBorderR, radioBorderG, radioBorderB),
+            borderWidth: 1,
           });
+          if (el.required) radioGroup.enableRequired();
+          if (el.selectedByDefault) pendingRadioSelections.set(groupName, optionLabel);
         } else if (el.type === "form-checkbox") {
-          ensureForm()
-            .createCheckBox(el.fieldName)
-            .addToPage(page, {
-              x: el.xPt,
-              y: pageHeightPt - el.yPt - el.heightPt,
-              width: el.widthPt,
-              height: el.heightPt,
-            });
+          const [checkboxTextR, checkboxTextG, checkboxTextB] = hexToRgbFloat(el.textColor);
+          const [checkboxBorderR, checkboxBorderG, checkboxBorderB] = hexToRgbFloat(el.borderColor);
+          const checkboxField = ensureForm().createCheckBox(el.fieldName);
+          if (el.required) checkboxField.enableRequired();
+          checkboxField.addToPage(page, {
+            x: el.xPt,
+            y: pageHeightPt - el.yPt - el.heightPt,
+            width: el.widthPt,
+            height: el.heightPt,
+            textColor: rgb(checkboxTextR, checkboxTextG, checkboxTextB),
+            borderColor: rgb(checkboxBorderR, checkboxBorderG, checkboxBorderB),
+            borderWidth: 1,
+          });
+          if (el.checked) checkboxField.check();
         } else if (el.type === "stamp") {
           const cx = el.xPt + el.widthPt / 2;
           const cy = pageHeightPt - el.yPt - el.heightPt / 2;
@@ -1752,6 +1914,10 @@ export function PdfEditorWorkspace() {
         }
       }
 
+      for (const [groupName, optionLabel] of pendingRadioSelections) {
+        radioGroupCache.get(groupName)?.select(optionLabel);
+      }
+
       const outBytes = await doc.save();
       const blob = new Blob([outBytes as BlobPart], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -1834,10 +2000,15 @@ export function PdfEditorWorkspace() {
     : 0;
   const selectedShapeElement =
     selectedElement && (selectedElement.type === "rect" || selectedElement.type === "ellipse") ? selectedElement : undefined;
-  const selectedLineElement = selectedElement && selectedElement.type === "line" ? selectedElement : undefined;
+  // Line and arrow share the exact same shape (two endpoints + color/thickness),
+  // so they share this one toolbar too — LineEditToolbar's element type accepts both.
+  const selectedLineElement =
+    selectedElement && (selectedElement.type === "line" || selectedElement.type === "arrow") ? selectedElement : undefined;
   const selectedDropdownElement = selectedElement && selectedElement.type === "form-dropdown" ? selectedElement : undefined;
   const selectedFormTextElement = selectedElement && selectedElement.type === "form-text" ? selectedElement : undefined;
   const selectedImageElement = selectedElement && selectedElement.type === "image" ? selectedElement : undefined;
+  const selectedCheckboxElement = selectedElement && selectedElement.type === "form-checkbox" ? selectedElement : undefined;
+  const selectedRadioElement = selectedElement && selectedElement.type === "form-radio" ? selectedElement : undefined;
   const searchMatches = findAllMatches();
 
   return (
@@ -2476,7 +2647,7 @@ export function PdfEditorWorkspace() {
                   />
                 )}
                 {pageElements
-                  .filter((el) => el.type === "line")
+                  .filter((el) => el.type === "line" || el.type === "arrow")
                   .map((el) => (
                     <g key={el.id}>
                       <line
@@ -2488,6 +2659,25 @@ export function PdfEditorWorkspace() {
                         strokeWidth={el.strokeWidthPt * scale}
                         strokeLinecap="round"
                       />
+                      {el.type === "arrow" &&
+                        arrowHeadWings(
+                          el.x1Pt * scale,
+                          el.y1Pt * scale,
+                          el.x2Pt * scale,
+                          el.y2Pt * scale,
+                          Math.max(8, el.strokeWidthPt * scale * 4)
+                        ).map(([wx, wy], i) => (
+                          <line
+                            key={i}
+                            x1={el.x2Pt * scale}
+                            y1={el.y2Pt * scale}
+                            x2={wx}
+                            y2={wy}
+                            stroke={el.color}
+                            strokeWidth={el.strokeWidthPt * scale}
+                            strokeLinecap="round"
+                          />
+                        ))}
                       {(activeTool === "cursor" || activeTool === "erase") && (
                         <line
                           x1={el.x1Pt * scale}
@@ -2508,17 +2698,50 @@ export function PdfEditorWorkspace() {
                     </g>
                   ))}
                 {lineDraft && (
-                  <line
-                    x1={lineDraft.start.x * scale}
-                    y1={lineDraft.start.y * scale}
-                    x2={lineDraft.current.x * scale}
-                    y2={lineDraft.current.y * scale}
-                    stroke={activeColorHex}
-                    strokeWidth={2 * scale}
-                    strokeLinecap="round"
-                  />
+                  <>
+                    <line
+                      x1={lineDraft.start.x * scale}
+                      y1={lineDraft.start.y * scale}
+                      x2={lineDraft.current.x * scale}
+                      y2={lineDraft.current.y * scale}
+                      stroke={activeColorHex}
+                      strokeWidth={2 * scale}
+                      strokeLinecap="round"
+                    />
+                    {shapeType === "arrow" &&
+                      arrowHeadWings(
+                        lineDraft.start.x * scale,
+                        lineDraft.start.y * scale,
+                        lineDraft.current.x * scale,
+                        lineDraft.current.y * scale,
+                        Math.max(8, 2 * scale * 4)
+                      ).map(([wx, wy], i) => (
+                        <line
+                          key={i}
+                          x1={lineDraft.current.x * scale}
+                          y1={lineDraft.current.y * scale}
+                          x2={wx}
+                          y2={wy}
+                          stroke={activeColorHex}
+                          strokeWidth={2 * scale}
+                          strokeLinecap="round"
+                        />
+                      ))}
+                  </>
                 )}
               </svg>
+
+              {whiteoutDraft && (
+                <div
+                  className="pointer-events-none absolute z-10 border border-dashed border-base-content/30 bg-white"
+                  style={{
+                    left: Math.min(whiteoutDraft.start.x, whiteoutDraft.current.x) * scale,
+                    top: Math.min(whiteoutDraft.start.y, whiteoutDraft.current.y) * scale,
+                    width: Math.abs(whiteoutDraft.current.x - whiteoutDraft.start.x) * scale,
+                    height: Math.abs(whiteoutDraft.current.y - whiteoutDraft.start.y) * scale,
+                  }}
+                />
+              )}
 
               <div
                 ref={overlayRef}
@@ -2655,7 +2878,7 @@ export function PdfEditorWorkspace() {
                   })}
 
                 {pageElements
-                  .filter((el) => el.type !== "path" && el.type !== "text-edit" && el.type !== "line")
+                  .filter((el) => el.type !== "path" && el.type !== "text-edit" && el.type !== "line" && el.type !== "arrow")
                   .map((el) => (
                     <div
                       key={el.id}
@@ -2938,34 +3161,50 @@ export function PdfEditorWorkspace() {
                         })()}
 
                       {el.type === "form-radio" && (
-                        <div className="flex h-full w-full items-center gap-1 rounded border-2 border-dashed border-secondary bg-secondary/10 px-1.5">
-                          <ToolIcon name="radio-button" className="h-3.5 w-3.5 shrink-0 text-secondary" />
-                          <input
-                            type="text"
-                            value={el.groupName}
-                            onChange={(event) => updateElement(el.id, { groupName: event.target.value })}
-                            onFocus={pushHistory}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            placeholder="Group"
-                            title="Radio buttons sharing this group name become one choice"
-                            className="w-14 min-w-0 border-none border-r border-secondary/30 bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
-                          />
-                          <input
-                            type="text"
-                            value={el.optionLabel}
-                            onChange={(event) => updateElement(el.id, { optionLabel: event.target.value })}
-                            onFocus={pushHistory}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            placeholder="Option"
-                            className="min-w-0 flex-1 border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
-                          />
-                        </div>
+                        // A real, clickable radio dot — editing the group name/option
+                        // label/colors moved to the floating RadioEditToolbar (same
+                        // reasoning as form-text/dropdown: cramming text inputs into an
+                        // already-tiny 20x20 box never worked well). Picking this one
+                        // clears "selected" on every other option sharing its group name,
+                        // mirroring how a real radio group behaves.
+                        <button
+                          type="button"
+                          onClick={() => selectRadioOption(el)}
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                            setSelectedElementId(el.id);
+                          }}
+                          title={el.optionLabel || "Radio option"}
+                          className="flex h-full w-full items-center justify-center rounded-full"
+                          style={{ border: `1px solid ${el.borderColor}` }}
+                        >
+                          {el.selectedByDefault && (
+                            <span className="h-1/2 w-1/2 rounded-full" style={{ backgroundColor: el.textColor }} />
+                          )}
+                        </button>
                       )}
 
                       {el.type === "form-checkbox" && (
-                        <div className="flex h-full w-full items-center justify-center rounded border-2 border-dashed border-secondary bg-secondary/10">
-                          <ToolIcon name="checkbox" className="h-3.5 w-3.5 text-secondary" />
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            pushHistory();
+                            updateElement(el.id, { checked: !el.checked });
+                          }}
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                            setSelectedElementId(el.id);
+                          }}
+                          title={el.fieldName}
+                          className="flex h-full w-full items-center justify-center rounded"
+                          style={{ border: `1px solid ${el.borderColor}` }}
+                        >
+                          {el.checked && (
+                            <span className="h-3/4 w-3/4" style={{ color: el.textColor }}>
+                              <ToolIcon name="check" className="h-full w-full" />
+                            </span>
+                          )}
+                        </button>
                       )}
 
                       {el.type === "stamp" && (
@@ -3058,7 +3297,7 @@ export function PdfEditorWorkspace() {
                   scale={scale}
                   onUpdate={(patch) => updateElement(selectedFormTextElement.id, patch)}
                   onDuplicate={() => duplicateFormTextElement(selectedFormTextElement)}
-                  onDelete={() => removeElement(selectedFormTextElement.id)}
+                  onDelete={() => clearOrRemoveFormTextElement(selectedFormTextElement)}
                 />
               )}
 
@@ -3070,6 +3309,28 @@ export function PdfEditorWorkspace() {
                   onUpdate={(patch) => updateElement(selectedImageElement.id, patch)}
                   onDuplicate={() => duplicateImageElement(selectedImageElement)}
                   onDelete={() => removeElement(selectedImageElement.id)}
+                />
+              )}
+
+              {selectedCheckboxElement && (
+                <CheckboxEditToolbar
+                  key={selectedCheckboxElement.id}
+                  element={selectedCheckboxElement}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedCheckboxElement.id, patch)}
+                  onDuplicate={() => duplicateCheckboxElement(selectedCheckboxElement)}
+                  onDelete={() => removeElement(selectedCheckboxElement.id)}
+                />
+              )}
+
+              {selectedRadioElement && (
+                <RadioEditToolbar
+                  key={selectedRadioElement.id}
+                  element={selectedRadioElement}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedRadioElement.id, patch)}
+                  onDuplicate={() => duplicateRadioElement(selectedRadioElement)}
+                  onDelete={() => removeElement(selectedRadioElement.id)}
                 />
               )}
               </div>

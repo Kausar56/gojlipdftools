@@ -249,6 +249,12 @@ const paths: Record<string, React.ReactNode> = {
   "shape-rect": <rect x="4" y="6" width="16" height="12" rx="1" />,
   "shape-circle": <circle cx="12" cy="12" r="8" />,
   "shape-line": <path d="M5 19L19 5" />,
+  "shape-arrow": (
+    <>
+      <path d="M5 19L19 5" />
+      <path d="M19 5v6M19 5h-6" />
+    </>
+  ),
   "image-tool": (
     <>
       <rect x="3" y="4" width="18" height="16" rx="1.5" />

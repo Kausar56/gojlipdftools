@@ -6,26 +6,19 @@ import type { EditorElement } from "@/lib/editorElements";
 import { ToolIcon } from "./icons";
 import { NativeColorInput } from "./NativeColorInput";
 
-type FormTextElement = Extract<EditorElement, { type: "form-text" }>;
+type RadioElement = Extract<EditorElement, { type: "form-radio" }>;
 
-// Same shape as DropdownEditToolbar (border color, align, font size, font
-// color, a settings popover, duplicate/delete) — form-text just doesn't have
-// an options list, so its popover is only field name + required.
-export function FormTextEditToolbar({
+export function RadioEditToolbar({
   element,
-  topPt,
-  heightPt,
   scale,
   onUpdate,
   onDuplicate,
   onDelete,
 }: {
-  element: FormTextElement;
-  topPt: number;
-  heightPt: number;
+  element: RadioElement;
   scale: number;
-  onUpdate: (patch: Partial<FormTextElement>) => void;
-  onDuplicate?: () => void;
+  onUpdate: (patch: Partial<RadioElement>) => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
   const [openMenu, setOpenMenu] = useState<"border" | "color" | "settings" | null>(null);
@@ -39,9 +32,6 @@ export function FormTextEditToolbar({
     document.addEventListener("pointerdown", onOutsidePointerDown);
     return () => document.removeEventListener("pointerdown", onOutsidePointerDown);
   }, [openMenu]);
-
-  const topAbove = topPt * scale - 44;
-  const top = topAbove >= 0 ? topAbove : topPt * scale + heightPt * scale + 6;
 
   const baseLeft = element.xPt * scale;
   const [left, setLeft] = useState(baseLeft);
@@ -59,7 +49,7 @@ export function FormTextEditToolbar({
       ref={rootRef}
       onPointerDown={(event) => event.stopPropagation()}
       className="absolute z-20 flex items-center gap-0.5 rounded-lg border border-primary/30 bg-base-100 p-1 shadow-lg"
-      style={{ left, top }}
+      style={{ left, top: Math.max(0, element.yPt * scale - 44) }}
     >
       <div className="relative">
         <button
@@ -106,76 +96,14 @@ export function FormTextEditToolbar({
 
       <span className="mx-0.5 h-4 w-px bg-base-300" />
 
-      <div className="flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={() => onUpdate({ align: "left" })}
-          className={`btn btn-xs btn-square ${element.align === "left" ? "btn-primary" : "btn-ghost"}`}
-          title="Align left"
-        >
-          <ToolIcon name="align-left" className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onUpdate({ align: "center" })}
-          className={`btn btn-xs btn-square ${element.align === "center" ? "btn-primary" : "btn-ghost"}`}
-          title="Align center"
-        >
-          <ToolIcon name="align-center" className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onUpdate({ align: "right" })}
-          className={`btn btn-xs btn-square ${element.align === "right" ? "btn-primary" : "btn-ghost"}`}
-          title="Align right"
-        >
-          <ToolIcon name="align-right" className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      <span className="mx-0.5 h-4 w-px bg-base-300" />
-
-      <div className="flex items-center gap-0.5">
-        <button
-          type="button"
-          onClick={() => onUpdate({ fontSizePt: Math.max(6, Math.round(element.fontSizePt) - 1) })}
-          className="btn btn-ghost btn-xs btn-square"
-          aria-label="Decrease font size"
-          title="Decrease font size"
-        >
-          <ToolIcon name="minus" className="h-3 w-3" />
-        </button>
-        <input
-          type="number"
-          min={6}
-          max={72}
-          value={Math.round(element.fontSizePt)}
-          onChange={(event) => onUpdate({ fontSizePt: Number(event.target.value) || element.fontSizePt })}
-          className="input input-bordered input-xs w-10 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-          aria-label="Font size"
-          title="Font size"
-        />
-        <button
-          type="button"
-          onClick={() => onUpdate({ fontSizePt: Math.min(72, Math.round(element.fontSizePt) + 1) })}
-          className="btn btn-ghost btn-xs btn-square"
-          aria-label="Increase font size"
-          title="Increase font size"
-        >
-          <ToolIcon name="plus" className="h-3 w-3" />
-        </button>
-      </div>
-
-      <span className="mx-0.5 h-4 w-px bg-base-300" />
-
       <div className="relative">
         <button
           type="button"
           onClick={() => setOpenMenu((current) => (current === "color" ? null : "color"))}
           className="btn btn-ghost btn-xs btn-square relative"
-          title={`Font color (currently ${element.textColor})`}
+          title={`Dot color (currently ${element.textColor})`}
         >
-          <ToolIcon name="palette" className="h-3.5 w-3.5" />
+          <ToolIcon name="radio-button" className="h-3.5 w-3.5" />
           <span
             className="absolute right-0 bottom-0 h-2 w-2 rounded-full border border-base-100"
             style={{ backgroundColor: element.textColor }}
@@ -218,7 +146,7 @@ export function FormTextEditToolbar({
           type="button"
           onClick={() => setOpenMenu((current) => (current === "settings" ? null : "settings"))}
           className={`btn btn-xs gap-1 ${openMenu === "settings" ? "btn-primary" : "btn-ghost"}`}
-          title="Field name & settings"
+          title="Group, option & settings"
         >
           <ToolIcon name="form-field" className="h-3.5 w-3.5" />
           <ToolIcon name="chevron-down" className="h-3 w-3" />
@@ -227,13 +155,34 @@ export function FormTextEditToolbar({
         {openMenu === "settings" && (
           <div className="absolute top-full left-0 z-30 mt-1 w-56 space-y-3 rounded-box border border-base-300 bg-base-100 p-3 shadow-lg">
             <label className="block text-xs font-medium text-base-content">
-              Field name
+              Group name
               <input
                 type="text"
-                value={element.fieldName}
-                onChange={(event) => onUpdate({ fieldName: event.target.value })}
+                value={element.groupName}
+                onChange={(event) => onUpdate({ groupName: event.target.value })}
+                title="Radio buttons sharing this group name become one choice"
                 className="input input-bordered input-sm mt-1 w-full"
               />
+            </label>
+
+            <label className="block text-xs font-medium text-base-content">
+              Option label
+              <input
+                type="text"
+                value={element.optionLabel}
+                onChange={(event) => onUpdate({ optionLabel: event.target.value })}
+                className="input input-bordered input-sm mt-1 w-full"
+              />
+            </label>
+
+            <label className="flex items-center gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                checked={element.selectedByDefault}
+                onChange={(event) => onUpdate({ selectedByDefault: event.target.checked })}
+                className="checkbox checkbox-sm"
+              />
+              Selected by default
             </label>
 
             <label className="flex items-center gap-2 text-sm text-base-content">
@@ -249,32 +198,14 @@ export function FormTextEditToolbar({
         )}
       </div>
 
-      {onDuplicate && (
-        <>
-          <span className="mx-0.5 h-4 w-px bg-base-300" />
-          <button
-            type="button"
-            onClick={onDuplicate}
-            className="btn btn-ghost btn-xs btn-square"
-            aria-label="Duplicate"
-            title="Duplicate"
-          >
-            <ToolIcon name="duplicate" className="h-3.5 w-3.5" />
-          </button>
-        </>
-      )}
+      <span className="mx-0.5 h-4 w-px bg-base-300" />
 
-      <button
-        type="button"
-        onClick={onDelete}
-        className="btn btn-ghost btn-xs btn-square text-error"
-        aria-label={element.isExisting ? "Clear value" : "Delete"}
-        // A field auto-detected from the uploaded PDF can't actually be
-        // deleted (it's a real field in that file) — this clears its value
-        // instead, so the label says what it actually does.
-        title={element.isExisting ? "Clear value" : "Delete"}
-      >
-        <ToolIcon name={element.isExisting ? "eraser" : "trash"} className="h-3.5 w-3.5" />
+      <button type="button" onClick={onDuplicate} className="btn btn-ghost btn-xs btn-square" aria-label="Duplicate" title="Duplicate">
+        <ToolIcon name="duplicate" className="h-3.5 w-3.5" />
+      </button>
+
+      <button type="button" onClick={onDelete} className="btn btn-ghost btn-xs btn-square text-error" aria-label="Delete" title="Delete">
+        <ToolIcon name="trash" className="h-3.5 w-3.5" />
       </button>
     </div>
   );

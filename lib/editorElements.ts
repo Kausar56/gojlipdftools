@@ -77,6 +77,17 @@ export type EditorElement =
   | {
       id: string;
       pageIndex: number;
+      type: "arrow";
+      x1Pt: number;
+      y1Pt: number;
+      x2Pt: number;
+      y2Pt: number;
+      color: string;
+      strokeWidthPt: number;
+    }
+  | {
+      id: string;
+      pageIndex: number;
       type: "link";
       xPt: number;
       yPt: number;
@@ -132,6 +143,13 @@ export type EditorElement =
       widthPt: number;
       heightPt: number;
       fieldName: string;
+      /** Whether the box starts ticked when the PDF is opened. */
+      checked: boolean;
+      /** Checkmark color — adaptive by default (sampled from the page, same
+       *  as form-text's textColor), user-overridable from the toolbar. */
+      textColor: string;
+      borderColor: string;
+      required: boolean;
     }
   | {
       id: string;
@@ -173,6 +191,12 @@ export type EditorElement =
        *  time, each contributing one selectable option. */
       groupName: string;
       optionLabel: string;
+      /** True on at most one option per group — that option becomes the
+       *  group's default selection when the PDF is opened. */
+      selectedByDefault: boolean;
+      textColor: string;
+      borderColor: string;
+      required: boolean;
     }
   | {
       id: string;
