@@ -5,7 +5,12 @@ import { ToolIcon } from "./icons";
 import { TextEditToolbar } from "./TextEditToolbar";
 import { ShapeEditToolbar } from "./ShapeEditToolbar";
 import { LineEditToolbar } from "./LineEditToolbar";
+import { DropdownEditToolbar } from "./DropdownEditToolbar";
+import { FormTextEditToolbar } from "./FormTextEditToolbar";
+import { SignatureMenu } from "./SignatureMenu";
+import { ImageEditToolbar } from "./ImageEditToolbar";
 import { SignaturePad } from "./SignaturePad";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { FindReplacePanel } from "./FindReplacePanel";
 import { ToolbarDropdown } from "./ToolbarDropdown";
 import { NativeColorInput } from "./NativeColorInput";
@@ -243,6 +248,117 @@ async function renderAndDetectPage(
   return detectTextItems(page, ctx, baseViewport.height, OFFSCREEN_RENDER_SCALE);
 }
 
+/** Scans every page's AcroForm widget annotations for text fields already
+ *  present in the uploaded PDF (built in Acrobat, Google Forms exports, form
+ *  templates, etc.) and turns each into an editable form-text overlay —
+ *  Sejda-style "open a fillable PDF and just click into it to type," instead
+ *  of requiring the user to redraw every field by hand with the Forms tool
+ *  first. Scoped to text fields only for now (the overwhelming majority of
+ *  real-world forms); checkboxes/dropdowns/radios in an uploaded PDF still
+ *  render as plain (uneditable) page content, same as before. */
+async function detectExistingFormFields(pdfDoc: import("pdfjs-dist").PDFDocumentProxy): Promise<EditorElement[]> {
+  const detected: EditorElement[] = [];
+  for (let pageIndex = 0; pageIndex < pdfDoc.numPages; pageIndex++) {
+    const page = await pdfDoc.getPage(pageIndex + 1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const annotations = (await page.getAnnotations({ intent: "display" })) as Array<{
+      subtype?: string;
+      fieldType?: string;
+      fieldName?: string;
+      fieldValue?: unknown;
+      multiLine?: boolean;
+      rect?: [number, number, number, number];
+      hidden?: boolean;
+      required?: boolean;
+      borderColor?: Record<number, number>;
+      defaultAppearanceData?: { fontSize?: number };
+    }>;
+
+    const textFieldAnnots = annotations.filter(
+      (a) => a.subtype === "Widget" && a.fieldType === "Tx" && !a.hidden && a.fieldName && a.rect,
+    );
+    if (textFieldAnnots.length === 0) continue;
+
+    // One off-screen render + one pixel readback per page (not per field —
+    // same reasoning as the text-color sampling above) so each field's text
+    // color can be picked to actually read against whatever's really behind
+    // it, instead of assuming every page is plain white.
+    let pixels: Uint8ClampedArray | null = null;
+    let pixelsWidth = 0;
+    let pixelsHeight = 0;
+    try {
+      const offscreenViewport = page.getViewport({ scale: OFFSCREEN_RENDER_SCALE });
+      const offscreenCanvas = document.createElement("canvas");
+      offscreenCanvas.width = offscreenViewport.width;
+      offscreenCanvas.height = offscreenViewport.height;
+      const offscreenCtx = offscreenCanvas.getContext("2d");
+      if (offscreenCtx) {
+        await page.render({ canvas: offscreenCanvas, canvasContext: offscreenCtx, viewport: offscreenViewport }).promise;
+        pixels = offscreenCtx.getImageData(0, 0, offscreenCanvas.width, offscreenCanvas.height).data;
+        pixelsWidth = offscreenCanvas.width;
+        pixelsHeight = offscreenCanvas.height;
+      }
+    } catch {
+      // Sampling is best-effort — fields still get detected, just default to black text.
+    }
+
+    for (const annot of textFieldAnnots) {
+      const [x1, y1, x2, y2] = annot.rect!;
+      const widthPt = Math.abs(x2 - x1);
+      const heightPt = Math.abs(y2 - y1);
+      if (widthPt < 4 || heightPt < 4) continue;
+      // convertToViewportPoint (not manual pageHeight - y math) so a rotated
+      // page or a non-zero MediaBox origin still lands in the right spot —
+      // it's the same top-down, unscaled point space every other xPt/yPt in
+      // this file already uses.
+      const [xPt, topYPt] = baseViewport.convertToViewportPoint(Math.min(x1, x2), Math.max(y1, y2));
+
+      let textColor = "#000000";
+      if (pixels) {
+        const bgHex = sampleTextBackgroundColor(
+          pixels,
+          pixelsWidth,
+          pixelsHeight,
+          xPt * OFFSCREEN_RENDER_SCALE,
+          topYPt * OFFSCREEN_RENDER_SCALE,
+          widthPt * OFFSCREEN_RENDER_SCALE,
+          heightPt * OFFSCREEN_RENDER_SCALE,
+        );
+        textColor = getReadableTextColor(bgHex);
+      }
+
+      // Prefer the field's own real border color/font size from the PDF
+      // itself over a generic default, when pdf.js was able to read them.
+      const borderColor = annot.borderColor
+        ? `#${[0, 1, 2].map((i) => Math.round(annot.borderColor![i] ?? 0).toString(16).padStart(2, "0")).join("")}`
+        : "#000000";
+      const fontSizePt = annot.defaultAppearanceData?.fontSize && annot.defaultAppearanceData.fontSize > 0
+        ? annot.defaultAppearanceData.fontSize
+        : 11;
+
+      detected.push({
+        id: createElementId(),
+        pageIndex,
+        type: "form-text",
+        xPt,
+        yPt: topYPt,
+        widthPt,
+        heightPt,
+        fieldName: annot.fieldName!,
+        defaultValue: typeof annot.fieldValue === "string" ? annot.fieldValue : "",
+        multiline: Boolean(annot.multiLine),
+        isExisting: true,
+        textColor,
+        borderColor,
+        fontSizePt,
+        align: "left",
+        required: Boolean(annot.required),
+      });
+    }
+  }
+  return detected;
+}
+
 export function PdfEditorWorkspace() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -292,6 +408,10 @@ export function PdfEditorWorkspace() {
   const [drawingPath, setDrawingPath] = useState<Point[] | null>(null);
   const [lineDraft, setLineDraft] = useState<{ start: Point; current: Point } | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
+  // Cached so re-clicking "Sign" later can offer to reuse it instead of
+  // always reopening a blank drawing pad — see SignatureMenu.
+  const [savedSignature, setSavedSignature] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [past, setPast] = useState<EditorElement[][]>([]);
   const [future, setFuture] = useState<EditorElement[][]>([]);
@@ -320,6 +440,7 @@ export function PdfEditorWorkspace() {
       return null;
     });
     setStatus("idle");
+    setShowSuccessModal(false);
     // Intentionally only watches `elements` — viewport/zoom/page-navigation
     // state doesn't affect what would be saved, so it shouldn't force a re-save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -446,6 +567,7 @@ export function PdfEditorWorkspace() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
     setStatus("idle");
+    setShowSuccessModal(false);
     setErrorMessage("");
     setElements([]);
     setPast([]);
@@ -459,6 +581,15 @@ export function PdfEditorWorkspace() {
     setPdfDoc(doc);
     setPageCount(doc.numPages);
     setCurrentPage(0);
+
+    // Best-effort — a PDF with a malformed AcroForm shouldn't block opening
+    // it for editing, it just won't get auto-filled fields.
+    try {
+      const detectedFields = await detectExistingFormFields(doc);
+      if (detectedFields.length > 0) setElements(detectedFields);
+    } catch {
+      // Ignore — the page still opens fine without pre-detected fields.
+    }
   }
 
   function toPagePoint(event: { clientX: number; clientY: number }): Point {
@@ -467,6 +598,43 @@ export function PdfEditorWorkspace() {
       x: (event.clientX - rect.left) / scale,
       y: (event.clientY - rect.top) / scale,
     };
+  }
+
+  /** Center of whatever part of the page is actually visible in the browser
+   *  window right now — not the page's own full-height center. This app's
+   *  page view has no inner scroll container of its own (see the comment on
+   *  scrollContainerRef below); the whole document scrolls, so on a page
+   *  taller than the window, the page's true vertical center is very often
+   *  well outside the current scroll position. Signatures placed there
+   *  looked like they'd silently failed to add anything. */
+  function visibleCenterPagePoint(): Point {
+    const rect = overlayRef.current?.getBoundingClientRect();
+    if (!rect) return { x: pageSizePt.width / 2, y: pageSizePt.height / 2 };
+    const visibleTop = Math.max(rect.top, 0);
+    const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+    const centerScreenY = visibleBottom > visibleTop ? (visibleTop + visibleBottom) / 2 : rect.top + rect.height / 2;
+    return {
+      x: pageSizePt.width / 2,
+      y: (centerScreenY - rect.top) / scale,
+    };
+  }
+
+  /** Black or white, whichever reads on the page's actual pixels under a
+   *  newly-placed form field — samples the currently-rendered on-screen
+   *  canvas at the click point rather than assuming every page is plain
+   *  white (a colored template, a dark scanned page, etc. would otherwise
+   *  swallow the text). */
+  function readableFormTextColorAt(xPt: number, yPt: number, widthPt: number, heightPt: number): string {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return "#000000";
+    try {
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const bgHex = sampleTextBackgroundColor(data, canvas.width, canvas.height, xPt * scale, yPt * scale, widthPt * scale, heightPt * scale);
+      return getReadableTextColor(bgHex);
+    } catch {
+      return "#000000";
+    }
   }
 
   function pushHistory() {
@@ -515,12 +683,21 @@ export function PdfEditorWorkspace() {
         ) {
           const newFontSizePt = patch.fontSizePt;
           const isBold = "isBold" in patch && typeof patch.isBold === "boolean" ? patch.isBold : el.isBold;
-          const measuredWidthPt = measureTextWidthPt(el.text, newFontSizePt, el.fontFamily as FontFamilyGuess, isBold);
+          const family = el.fontFamily as FontFamilyGuess;
           if (el.type === "text-edit") {
+            // Always a single line — no newlines possible in this type.
+            const measuredWidthPt = measureTextWidthPt(el.text, newFontSizePt, family, isBold);
             const ratio = newFontSizePt / el.fontSizePt;
             return { ...el, ...patch, widthPt: Math.max(20, measuredWidthPt), heightPt: el.heightPt * ratio } as EditorElement;
           }
-          return { ...el, ...patch, widthPt: Math.max(20, measuredWidthPt) } as EditorElement;
+          // "text" can have real newlines now (wrap is off; Enter is the only
+          // way to get a new line) — measuring el.text as one string would run
+          // measureText() over the raw "\n" characters instead of treating them
+          // as line breaks, undercounting the box's real required width.
+          const widestLinePt = el.text
+            .split("\n")
+            .reduce((max, line) => Math.max(max, measureTextWidthPt(line, newFontSizePt, family, isBold)), 0);
+          return { ...el, ...patch, widthPt: Math.max(20, widestLinePt + 8) } as EditorElement;
         }
         return { ...el, ...patch } as EditorElement;
       }),
@@ -557,6 +734,47 @@ export function PdfEditorWorkspace() {
       ...prev,
       { ...el, id, x1Pt: el.x1Pt + 12, y1Pt: el.y1Pt + 12, x2Pt: el.x2Pt + 12, y2Pt: el.y2Pt + 12 },
     ]);
+    setSelectedElementId(id);
+  }
+
+  function duplicateDropdownElement(el: Extract<EditorElement, { type: "form-dropdown" }>) {
+    const id = createElementId();
+    pushHistory();
+    // A fresh fieldName, not just a position offset — pdf-lib fields must be
+    // uniquely named, and copying the original's name verbatim would collide
+    // with it at save time (FieldAlreadyExistsError).
+    setElements((prev) => [
+      ...prev,
+      { ...el, id, xPt: el.xPt + 12, yPt: el.yPt + 12, fieldName: `Dropdown_${createElementId()}` },
+    ]);
+    setSelectedElementId(id);
+  }
+
+  function duplicateFormTextElement(el: Extract<EditorElement, { type: "form-text" }>) {
+    const id = createElementId();
+    pushHistory();
+    // Fresh fieldName + never "isExisting" — a duplicate is a brand-new field
+    // in the output PDF, not another widget for whatever field it was copied
+    // from (which, for an auto-detected field, is a real field already in
+    // the uploaded file).
+    setElements((prev) => [
+      ...prev,
+      {
+        ...el,
+        id,
+        xPt: el.xPt + 12,
+        yPt: el.yPt + 12,
+        fieldName: `${el.multiline ? "TextArea" : "TextField"}_${createElementId()}`,
+        isExisting: false,
+      },
+    ]);
+    setSelectedElementId(id);
+  }
+
+  function duplicateImageElement(el: Extract<EditorElement, { type: "image" }>) {
+    const id = createElementId();
+    pushHistory();
+    setElements((prev) => [...prev, { ...el, id, xPt: el.xPt + 12, yPt: el.yPt + 12 }]);
     setSelectedElementId(id);
   }
 
@@ -762,42 +980,73 @@ export function PdfEditorWorkspace() {
         heightPt: 30,
       });
     } else if (activeTool === "form-text") {
+      const xPt = point.x - 75;
+      const yPt = point.y - 12;
+      const widthPt = 150;
+      const heightPt = 24;
       addElement({
         id: createElementId(),
         pageIndex: currentPage,
         type: "form-text",
-        xPt: point.x - 75,
-        yPt: point.y - 12,
-        widthPt: 150,
-        heightPt: 24,
+        xPt,
+        yPt,
+        widthPt,
+        heightPt,
         fieldName: `TextField_${createElementId()}`,
         defaultValue: "",
         multiline: false,
+        isExisting: false,
+        textColor: readableFormTextColorAt(xPt, yPt, widthPt, heightPt),
+        borderColor: "#000000",
+        fontSizePt: 11,
+        align: "left",
+        required: false,
       });
     } else if (activeTool === "form-multiline") {
+      const xPt = point.x - 90;
+      const yPt = point.y - 30;
+      const widthPt = 180;
+      const heightPt = 60;
       addElement({
         id: createElementId(),
         pageIndex: currentPage,
         type: "form-text",
-        xPt: point.x - 90,
-        yPt: point.y - 30,
-        widthPt: 180,
-        heightPt: 60,
+        xPt,
+        yPt,
+        widthPt,
+        heightPt,
         fieldName: `TextArea_${createElementId()}`,
         defaultValue: "",
         multiline: true,
+        isExisting: false,
+        textColor: readableFormTextColorAt(xPt, yPt, widthPt, heightPt),
+        borderColor: "#000000",
+        fontSizePt: 11,
+        align: "left",
+        required: false,
       });
     } else if (activeTool === "form-dropdown") {
+      const xPt = point.x - 75;
+      const yPt = point.y - 14;
+      const widthPt = 150;
+      const heightPt = 28;
       addElement({
         id: createElementId(),
         pageIndex: currentPage,
         type: "form-dropdown",
-        xPt: point.x - 75,
-        yPt: point.y - 12,
-        widthPt: 150,
-        heightPt: 24,
+        xPt,
+        yPt,
+        widthPt,
+        heightPt,
         fieldName: `Dropdown_${createElementId()}`,
-        optionsCsv: "Option 1, Option 2, Option 3",
+        optionsText: "Option 1\nOption 2\nOption 3",
+        selectedValue: "",
+        textColor: readableFormTextColorAt(xPt, yPt, widthPt, heightPt),
+        borderColor: "#000000",
+        fontSizePt: 11,
+        align: "left",
+        multiSelect: false,
+        required: false,
       });
     } else if (activeTool === "form-radio") {
       addElement({
@@ -934,15 +1183,17 @@ export function PdfEditorWorkspace() {
   }
 
   // Handle defaults to "se" (bottom-right, growing away from the fixed
-  // top-left corner) — that's the only handle text boxes render, and the only
-  // one shapes rendered before they grew the other 7. For shapes, each of the
-  // 8 handles keeps the *opposite* edge anchored (e.g. dragging the west/left
-  // handle keeps the right edge fixed and moves xPt), which is what makes
-  // resizing from any corner or edge feel natural instead of the box always
-  // jumping to re-anchor at its top-left.
+  // top-left corner). Each of the 8 handles keeps the *opposite* edge
+  // anchored (e.g. dragging the west/left handle keeps the right edge fixed
+  // and moves xPt), which is what makes resizing from any corner or edge
+  // feel natural instead of the box always jumping to re-anchor at its
+  // top-left. Text boxes don't reach this at all anymore — no resize handles
+  // render for them (see the RESIZE_HANDLES.map below), so their size only
+  // changes via the floating TextEditToolbar's own size control; only drag-
+  // to-move is left on the canvas for text.
   function startElementResize(el: EditorElement, event: React.PointerEvent, handle: ResizeHandle = "se") {
     event.stopPropagation();
-    if (el.type === "path" || el.type === "text-edit" || el.type === "line") return;
+    if (el.type === "path" || el.type === "text-edit" || el.type === "line" || el.type === "text") return;
 
     pushHistory();
 
@@ -950,10 +1201,7 @@ export function PdfEditorWorkspace() {
     // for the rest of the gesture — without it, a release that happens while
     // the cursor has drifted off the (now very thin) handle strip, or onto a
     // different element mid-drag, can fail to reach the cleanup below, and
-    // the resize never gets the pointerup that's supposed to stop it. Font-
-    // size dragging in particular covers a lot of vertical distance, so it's
-    // easy for the cursor to end up somewhere else by the time the button
-    // comes up.
+    // the resize never gets the pointerup that's supposed to stop it.
     const handleEl = event.currentTarget;
     const pointerId = event.pointerId;
     handleEl.setPointerCapture(pointerId);
@@ -963,73 +1211,17 @@ export function PdfEditorWorkspace() {
     const startWidth = el.widthPt;
     const startXPt = el.xPt;
     const startYPt = el.yPt;
-    const isText = el.type === "text";
-    const startHeight = !isText ? el.heightPt : 0;
-    const startFontSize = isText ? el.fontSizePt : 0;
-    const textValue = isText ? el.text : "";
-    const textFamily = isText ? (el.fontFamily as FontFamilyGuess) : "sans-serif";
-    const textIsBold = isText ? el.isBold : false;
+    const startHeight = el.heightPt;
 
-    function onMove(moveEvent: PointerEvent) {
+    // Coalesced to one update per animation frame — pointermove can fire far
+    // more often than the browser actually repaints, and processing every
+    // single one did more work than the screen could show anyway.
+    let rafId: number | null = null;
+    let latestMoveEvent: PointerEvent | null = null;
+
+    function processMove(moveEvent: PointerEvent) {
       const dxPt = (moveEvent.clientX - startX) / scale;
       const dyPt = (moveEvent.clientY - startY) / scale;
-
-      if (isText) {
-        const east = handle === "e" || handle === "ne" || handle === "se";
-        const west = handle === "w" || handle === "nw" || handle === "sw";
-
-        // The pure left/right handles (no north/south component) only change
-        // how wide the box is — same as any other element's width handle —
-        // so the text rewraps within it instead of the font size changing.
-        // Tying every handle to font size (the previous behavior) meant
-        // dragging the right edge alone also grew the text vertically, and
-        // shrinking the oversized 200pt-wide default box down to fit a short
-        // "Text" placeholder via that same handle read as a huge negative
-        // font-size delta — it went tiny almost immediately.
-        if (handle === "e" || handle === "w") {
-          if (east) {
-            updateElement(el.id, { widthPt: Math.max(20, startWidth + dxPt) });
-          } else {
-            const newWidth = Math.max(20, startWidth - dxPt);
-            updateElement(el.id, { widthPt: newWidth, xPt: startXPt + (startWidth - newWidth) });
-          }
-          return;
-        }
-
-        // n / s / and the corners: resizing controls font size (what users
-        // actually expect for those) rather than just the wrap width. Only
-        // the vertical component drives it.
-        const south = handle === "s" || handle === "se" || handle === "sw";
-        const north = handle === "n" || handle === "ne" || handle === "nw";
-        const isCorner = handle === "ne" || handle === "nw" || handle === "se" || handle === "sw";
-        // 1pt of font size per 1pt of drag (screen-pixel-smooth, since the
-        // rendered size is fontSizePt*scale) tracked the cursor exactly, but
-        // "exactly" reads as "way too sensitive" for something as coarse as
-        // font size — a small, easy-to-overshoot movement swung it by a lot.
-        // Slowing it down trades 1:1 tracking for something easier to land on
-        // a specific size with.
-        const FONT_RESIZE_SENSITIVITY = 0.4;
-        const delta = (south ? dyPt : north ? -dyPt : 0) * FONT_RESIZE_SENSITIVITY;
-
-        const newFontSize = Math.max(8, Math.min(160, startFontSize + delta));
-        const ratio = newFontSize / startFontSize;
-        const naturalWidthPt = measureTextWidthPt(textValue, newFontSize, textFamily, textIsBold);
-        // Corners grow the box diagonally — width scales right along with the
-        // font, same as before. Plain n/s handles are meant to grow "just
-        // downward/upward," so width is left alone entirely unless the text
-        // at the new font size would no longer fit and wrap — that's the one
-        // case width still has to move for a n/s-only drag.
-        const newWidth = isCorner
-          ? Math.max(20, startWidth * ratio, naturalWidthPt + 4)
-          : Math.max(startWidth, naturalWidthPt + 4);
-        const patch: Partial<EditorElement> = { fontSizePt: newFontSize, widthPt: newWidth };
-        // Only xPt gets anchor-adjusted (for the left-side handles) — text
-        // boxes have no stored heightPt (height just follows the content), so
-        // there's no yPt equivalent to keep the bottom edge from drifting.
-        if (west) patch.xPt = startXPt + (startWidth - newWidth);
-        updateElement(el.id, patch);
-        return;
-      }
 
       const patch: { xPt?: number; yPt?: number; widthPt?: number; heightPt?: number } = {};
       const west = handle === "w" || handle === "nw" || handle === "sw";
@@ -1053,7 +1245,16 @@ export function PdfEditorWorkspace() {
       }
       updateElement(el.id, patch as Partial<EditorElement>);
     }
+    function onMove(moveEvent: PointerEvent) {
+      latestMoveEvent = moveEvent;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (latestMoveEvent) processMove(latestMoveEvent);
+      });
+    }
     function onUp() {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       handleEl.releasePointerCapture(pointerId);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -1066,9 +1267,9 @@ export function PdfEditorWorkspace() {
     setActiveTool(toolId);
     if (toolId === "image") {
       imageInputRef.current?.click();
-    } else if (toolId === "signature") {
-      setShowSignaturePad(true);
     }
+    // "signature" is handled by SignatureMenu itself now (it decides between
+    // reopening the pad and showing the saved-signature popover), not here.
   }
 
   function readAsDataUrl(blob: Blob): Promise<string> {
@@ -1107,24 +1308,48 @@ export function PdfEditorWorkspace() {
       heightPt,
       dataUrl,
       mimeType: selected.type === "image/png" ? "image/png" : "image/jpeg",
+      rotationDeg: 0,
     });
   }
 
-  function handleSignatureConfirm(dataUrl: string) {
+  function handleSignatureConfirm(dataUrl: string, remember = true) {
     const widthPt = Math.min(pageSizePt.width * 0.4 || 160, 220);
-    const heightPt = widthPt * (180 / 400);
+    const heightPt = widthPt * (200 / 600);
+    const center = visibleCenterPagePoint();
     addElement({
       id: createElementId(),
       pageIndex: currentPage,
       type: "image",
-      xPt: (pageSizePt.width - widthPt) / 2,
-      yPt: (pageSizePt.height - heightPt) / 2,
+      xPt: center.x - widthPt / 2,
+      yPt: center.y - heightPt / 2,
       widthPt,
       heightPt,
       dataUrl,
       mimeType: "image/png",
+      rotationDeg: 0,
     });
+    if (remember) setSavedSignature(dataUrl);
     setShowSignaturePad(false);
+  }
+
+  /** Drops the already-saved signature onto the page again — same placement
+   *  math as a freshly-drawn one, just skipping the drawing pad entirely. */
+  function useExistingSignature(dataUrl: string) {
+    const widthPt = Math.min(pageSizePt.width * 0.4 || 160, 220);
+    const heightPt = widthPt * (200 / 600);
+    const center = visibleCenterPagePoint();
+    addElement({
+      id: createElementId(),
+      pageIndex: currentPage,
+      type: "image",
+      xPt: center.x - widthPt / 2,
+      yPt: center.y - heightPt / 2,
+      widthPt,
+      heightPt,
+      dataUrl,
+      mimeType: "image/png",
+      rotationDeg: 0,
+    });
   }
 
   async function reloadFileBytes(bytes: Uint8Array, name: string) {
@@ -1132,6 +1357,7 @@ export function PdfEditorWorkspace() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
     setStatus("idle");
+    setShowSuccessModal(false);
     setFile(newFile);
     const pdfjs = await loadPdfjs();
     const doc = await pdfjs.getDocument({ data: bytes }).promise;
@@ -1206,7 +1432,7 @@ export function PdfEditorWorkspace() {
     setErrorMessage("");
 
     try {
-      const { PDFDocument, StandardFonts, rgb, PDFName, PDFString } = await import("pdf-lib");
+      const { PDFDocument, StandardFonts, rgb, PDFName, PDFString, TextAlignment, degrees } = await import("pdf-lib");
       const bytes = await file.arrayBuffer();
       const doc = await PDFDocument.load(bytes);
       const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -1259,6 +1485,10 @@ export function PdfEditorWorkspace() {
 
         if (el.type === "text") {
           if (!el.text.trim()) continue;
+          // No maxWidth — the on-screen box is always grown to fit the
+          // longest line (wrap is off there too), so the saved PDF should
+          // only break lines where the user actually typed Enter, never
+          // because pdf-lib's own font metrics judged a line "too wide."
           page.drawText(el.text, {
             x: el.xPt,
             y: pageHeightPt - el.yPt - el.fontSizePt,
@@ -1266,7 +1496,6 @@ export function PdfEditorWorkspace() {
             font: getFont(el.fontFamily, el.isBold, el.isItalic),
             color: rgb(r, g, b),
             lineHeight: el.fontSizePt * 1.2,
-            maxWidth: el.widthPt,
           });
         } else if (el.type === "rect") {
           const fill = el.fillColorHex ? hexToRgbFloat(el.fillColorHex) : null;
@@ -1334,29 +1563,67 @@ export function PdfEditorWorkspace() {
             color: rgb(1, 1, 1),
           });
         } else if (el.type === "form-text") {
-          const field = ensureForm().createTextField(el.fieldName);
-          if (el.multiline) field.enableMultiline();
-          if (el.defaultValue) field.setText(el.defaultValue);
-          field.addToPage(page, {
-            x: el.xPt,
-            y: pageHeightPt - el.yPt - el.heightPt,
-            width: el.widthPt,
-            height: el.heightPt,
-          });
+          const textAlignment =
+            el.align === "center" ? TextAlignment.Center : el.align === "right" ? TextAlignment.Right : TextAlignment.Left;
+          if (el.isExisting) {
+            // Auto-detected from the uploaded PDF's own AcroForm — its widget
+            // is already on the page at the right spot in the original file,
+            // so this only needs to update the value, not place anything.
+            // Calling addToPage again would draw a second, duplicate widget
+            // right on top of the real one. Border color can't be changed
+            // this way (that's baked into the widget's own appearance at
+            // creation time), but font size/alignment/required still apply.
+            const field = ensureForm().getTextField(el.fieldName);
+            if (el.multiline) field.enableMultiline();
+            field.setText(el.defaultValue);
+            field.setFontSize(el.fontSizePt);
+            field.setAlignment(textAlignment);
+            if (el.required) field.enableRequired();
+          } else {
+            const field = ensureForm().createTextField(el.fieldName);
+            if (el.multiline) field.enableMultiline();
+            if (el.defaultValue) field.setText(el.defaultValue);
+            if (el.required) field.enableRequired();
+            const [formTextR, formTextG, formTextB] = hexToRgbFloat(el.textColor);
+            const [formBorderR, formBorderG, formBorderB] = hexToRgbFloat(el.borderColor);
+            field.addToPage(page, {
+              x: el.xPt,
+              y: pageHeightPt - el.yPt - el.heightPt,
+              width: el.widthPt,
+              height: el.heightPt,
+              textColor: rgb(formTextR, formTextG, formTextB),
+              borderColor: rgb(formBorderR, formBorderG, formBorderB),
+              borderWidth: 1,
+            });
+            field.setFontSize(el.fontSizePt);
+            field.setAlignment(textAlignment);
+          }
         } else if (el.type === "form-dropdown") {
-          const options = el.optionsCsv
-            .split(",")
+          const options = el.optionsText
+            .split("\n")
             .map((o) => o.trim())
             .filter(Boolean);
           if (options.length === 0) continue;
           const field = ensureForm().createDropdown(el.fieldName);
           field.setOptions(options);
+          if (el.multiSelect) field.enableMultiselect();
+          if (el.required) field.enableRequired();
+          if (el.selectedValue && options.includes(el.selectedValue)) field.select(el.selectedValue);
+          const [dropdownTextR, dropdownTextG, dropdownTextB] = hexToRgbFloat(el.textColor);
+          const [dropdownBorderR, dropdownBorderG, dropdownBorderB] = hexToRgbFloat(el.borderColor);
           field.addToPage(page, {
             x: el.xPt,
             y: pageHeightPt - el.yPt - el.heightPt,
             width: el.widthPt,
             height: el.heightPt,
+            textColor: rgb(dropdownTextR, dropdownTextG, dropdownTextB),
+            borderColor: rgb(dropdownBorderR, dropdownBorderG, dropdownBorderB),
+            borderWidth: 1,
           });
+          // setFontSize needs the field's default appearance (/DA) to already
+          // exist — addToPage above is what creates it, so this has to run
+          // after, not before.
+          field.setFontSize(el.fontSizePt);
         } else if (el.type === "form-radio") {
           if (!el.groupName.trim() || !el.optionLabel.trim()) continue;
           ensureRadioGroup(el.groupName.trim()).addOptionToPage(el.optionLabel.trim(), page, {
@@ -1395,12 +1662,38 @@ export function PdfEditorWorkspace() {
             image = el.mimeType === "image/png" ? await doc.embedPng(buf) : await doc.embedJpg(buf);
             imageCache.set(el.dataUrl, image);
           }
-          page.drawImage(image, {
-            x: el.xPt,
-            y: pageHeightPt - el.yPt - el.heightPt,
-            width: el.widthPt,
-            height: el.heightPt,
-          });
+          if (el.rotationDeg === 0) {
+            page.drawImage(image, {
+              x: el.xPt,
+              y: pageHeightPt - el.yPt - el.heightPt,
+              width: el.widthPt,
+              height: el.heightPt,
+            });
+          } else {
+            // pdf-lib's drawImage rotates around the (x, y) anchor itself (the
+            // pre-rotation bottom-left corner), not the image's center — so
+            // rotating in place needs a recomputed anchor that keeps the true
+            // center fixed, matching what the on-screen CSS rotate() already
+            // shows. Also negated: pdf-lib's rotation is counter-clockwise in
+            // PDF's y-up space, which displays as counter-clockwise on a
+            // normal (y-down) screen — opposite of CSS's clockwise-positive
+            // rotate(), which is what rotationDeg is defined to match.
+            const cx = el.xPt + el.widthPt / 2;
+            const cy = pageHeightPt - el.yPt - el.heightPt / 2;
+            const pdfAngleDeg = -el.rotationDeg;
+            const rad = (pdfAngleDeg * Math.PI) / 180;
+            const halfW = el.widthPt / 2;
+            const halfH = el.heightPt / 2;
+            const anchorX = cx - (halfW * Math.cos(rad) - halfH * Math.sin(rad));
+            const anchorY = cy - (halfW * Math.sin(rad) + halfH * Math.cos(rad));
+            page.drawImage(image, {
+              x: anchorX,
+              y: anchorY,
+              width: el.widthPt,
+              height: el.heightPt,
+              rotate: degrees(pdfAngleDeg),
+            });
+          }
         } else if (el.type === "path") {
           for (let i = 1; i < el.points.length; i++) {
             const p1 = el.points[i - 1];
@@ -1464,6 +1757,7 @@ export function PdfEditorWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't save this PDF: ${error.message}` : "Couldn't save this PDF.",));
@@ -1541,10 +1835,21 @@ export function PdfEditorWorkspace() {
   const selectedShapeElement =
     selectedElement && (selectedElement.type === "rect" || selectedElement.type === "ellipse") ? selectedElement : undefined;
   const selectedLineElement = selectedElement && selectedElement.type === "line" ? selectedElement : undefined;
+  const selectedDropdownElement = selectedElement && selectedElement.type === "form-dropdown" ? selectedElement : undefined;
+  const selectedFormTextElement = selectedElement && selectedElement.type === "form-text" ? selectedElement : undefined;
+  const selectedImageElement = selectedElement && selectedElement.type === "image" ? selectedElement : undefined;
   const searchMatches = findAllMatches();
 
   return (
     <div ref={workspaceRef} className="rounded-2xl border border-base-300 bg-base-100">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName={file?.name ?? "edited.pdf"}
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       {showSignaturePad && (
         <SignaturePad onConfirm={handleSignatureConfirm} onCancel={() => setShowSignaturePad(false)} />
       )}
@@ -1590,7 +1895,7 @@ export function PdfEditorWorkspace() {
         </div>
 
         {status === "done" && downloadUrl ? (
-          <a href={downloadUrl} download="edited.pdf" className="btn btn-primary btn-sm">
+          <a href={downloadUrl} download={file?.name ?? "edited.pdf"} className="btn btn-primary btn-sm">
             <ToolIcon name="download" className="h-4 w-4" />
             Download
           </a>
@@ -1713,14 +2018,18 @@ export function PdfEditorWorkspace() {
           Images
         </button>
 
-        <button
-          type="button"
-          onClick={() => handleToolClick("signature")}
-          className={`btn btn-sm gap-1.5 ${activeTool === "signature" ? "btn-primary" : "btn-ghost"}`}
-        >
-          <ToolIcon name="signature" className="h-4 w-4" />
-          Sign
-        </button>
+        <SignatureMenu
+          active={activeTool === "signature"}
+          savedSignature={savedSignature}
+          onUseSignature={(dataUrl) => {
+            setActiveTool("signature");
+            useExistingSignature(dataUrl);
+          }}
+          onNewSignature={() => {
+            setActiveTool("signature");
+            setShowSignaturePad(true);
+          }}
+        />
 
         <button
           type="button"
@@ -2084,7 +2393,7 @@ export function PdfEditorWorkspace() {
         {status === "done" && downloadUrl ? (
           <a
             href={downloadUrl}
-            download="edited.pdf"
+            download={file?.name ?? "edited.pdf"}
             className={`btn btn-primary shadow-lg ${toolbarPinned ? "pointer-events-auto" : ""}`}
           >
             <ToolIcon name="download" className="h-4 w-4" />
@@ -2372,21 +2681,23 @@ export function PdfEditorWorkspace() {
                         touchAction: "none",
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          removeElement(el.id);
-                        }}
-                        // z-20, one above the resize handles below — this button and the
-                        // "ne" corner handle sit in the same top-right corner, and with
-                        // matching z-index the one later in the DOM (the handle) was
-                        // winning every overlapping click, so Delete never fired there.
-                        className="absolute -right-2 -top-2 z-20 hidden h-5 w-5 items-center justify-center rounded-full bg-error text-white group-hover:flex"
-                        aria-label="Delete"
-                      >
-                        <ToolIcon name="close" className="h-3 w-3" />
-                      </button>
+                      {el.type !== "form-text" && el.type !== "text" && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            removeElement(el.id);
+                          }}
+                          // z-20, one above the resize handles below — this button and the
+                          // "ne" corner handle sit in the same top-right corner, and with
+                          // matching z-index the one later in the DOM (the handle) was
+                          // winning every overlapping click, so Delete never fired there.
+                          className="absolute -right-2 -top-2 z-20 hidden h-5 w-5 items-center justify-center rounded-full bg-error text-white group-hover:flex"
+                          aria-label="Delete"
+                        >
+                          <ToolIcon name="close" className="h-3 w-3" />
+                        </button>
+                      )}
 
                       {el.type === "text" && (
                         <textarea
@@ -2406,7 +2717,17 @@ export function PdfEditorWorkspace() {
                           }}
                           value={el.text}
                           onChange={(event) => {
-                            updateElement(el.id, { text: event.target.value });
+                            const newText = event.target.value;
+                            // Grows the box to fit whatever line is currently longest,
+                            // instead of wrapping at a fixed width — wrap="off" below stops
+                            // the browser from breaking lines on its own, so the only way to
+                            // get a second line is an actual Enter keypress, not running out
+                            // of horizontal room.
+                            const family = el.fontFamily as FontFamilyGuess;
+                            const widestLinePt = newText
+                              .split("\n")
+                              .reduce((max, line) => Math.max(max, measureTextWidthPt(line, el.fontSizePt, family, el.isBold)), 0);
+                            updateElement(el.id, { text: newText, widthPt: Math.max(20, widestLinePt + 8) });
                             event.target.style.height = "auto";
                             event.target.style.height = `${event.target.scrollHeight}px`;
                           }}
@@ -2449,7 +2770,12 @@ export function PdfEditorWorkspace() {
                           // the actual single-line height; the box only grows taller than
                           // that once the text truly wraps or a newline is typed.
                           rows={1}
-                          className="w-full cursor-move resize-none overflow-hidden border border-dashed border-transparent bg-transparent leading-tight outline-none hover:border-base-content/20 focus:cursor-text"
+                          // wrap="off" + whitespace-pre stop the browser from breaking a
+                          // line just because it hit the box's edge — the box is always
+                          // grown to fit the longest line instead (see onChange above), so
+                          // the only way text moves to a new line is an actual Enter.
+                          wrap="off"
+                          className="w-full cursor-move resize-none overflow-hidden border border-dashed border-transparent bg-transparent whitespace-pre leading-tight outline-none hover:border-base-content/20 focus:cursor-text"
                           style={{
                             color: el.color,
                             fontSize: el.fontSizePt * scale,
@@ -2497,7 +2823,13 @@ export function PdfEditorWorkspace() {
 
                       {el.type === "image" && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={el.dataUrl} alt="" className="h-full w-full object-contain" draggable={false} />
+                        <img
+                          src={el.dataUrl}
+                          alt=""
+                          className="h-full w-full object-contain"
+                          draggable={false}
+                          style={{ transform: el.rotationDeg ? `rotate(${el.rotationDeg}deg)` : undefined }}
+                        />
                       )}
 
                       {el.type === "whiteout" && (
@@ -2520,47 +2852,90 @@ export function PdfEditorWorkspace() {
                       )}
 
                       {el.type === "form-text" && !el.multiline && (
-                        <div className="flex h-full w-full items-center rounded border-2 border-dashed border-secondary bg-secondary/10 px-1.5">
+                        // Border is always visible now (not hover-only) — it previews the
+                        // field's real border color, which is baked into the saved PDF too,
+                        // same treatment as form-dropdown. Field name, border/font color,
+                        // align, size, and required all live in the floating
+                        // FormTextEditToolbar that appears when this is selected.
+                        <div className="flex h-full w-full items-center rounded px-1.5" style={{ border: `1px solid ${el.borderColor}` }}>
                           <input
                             type="text"
                             value={el.defaultValue}
                             onChange={(event) => updateElement(el.id, { defaultValue: event.target.value })}
-                            onFocus={pushHistory}
+                            onFocus={() => {
+                              pushHistory();
+                              setSelectedElementId(el.id);
+                            }}
                             onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Text field"
-                            className="min-w-0 flex-1 border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
+                            // The typed value's own color is picked per-field from the page's
+                            // actual background (see textColor) rather than a fixed Tailwind
+                            // class — a dark/colored page needs white text, not black-on-black.
+                            className="min-w-0 flex-1 border-none bg-transparent outline-none placeholder:opacity-40"
+                            style={{ color: el.textColor, fontSize: el.fontSizePt * scale, textAlign: el.align }}
                           />
                         </div>
                       )}
 
                       {el.type === "form-text" && el.multiline && (
-                        <div className="h-full w-full rounded border-2 border-dashed border-secondary bg-secondary/10 p-1.5">
+                        <div className="h-full w-full rounded p-1.5" style={{ border: `1px solid ${el.borderColor}` }}>
                           <textarea
                             value={el.defaultValue}
                             onChange={(event) => updateElement(el.id, { defaultValue: event.target.value })}
-                            onFocus={pushHistory}
+                            onFocus={() => {
+                              pushHistory();
+                              setSelectedElementId(el.id);
+                            }}
                             onPointerDown={(event) => event.stopPropagation()}
                             placeholder="Text multiline"
-                            className="h-full w-full resize-none border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
+                            className="h-full w-full resize-none border-none bg-transparent outline-none placeholder:opacity-40"
+                            style={{ color: el.textColor, fontSize: el.fontSizePt * scale, textAlign: el.align }}
                           />
                         </div>
                       )}
 
-                      {el.type === "form-dropdown" && (
-                        <div className="flex h-full w-full items-center gap-1 rounded border-2 border-dashed border-secondary bg-secondary/10 px-1.5">
-                          <ToolIcon name="dropdown-list" className="h-3.5 w-3.5 shrink-0 text-secondary" />
-                          <input
-                            type="text"
-                            value={el.optionsCsv}
-                            onChange={(event) => updateElement(el.id, { optionsCsv: event.target.value })}
-                            onFocus={pushHistory}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            placeholder="Option 1, Option 2"
-                            title="Comma-separated dropdown options"
-                            className="min-w-0 flex-1 border-none bg-transparent text-xs text-secondary outline-none placeholder:text-secondary/50"
-                          />
-                        </div>
-                      )}
+                      {el.type === "form-dropdown" &&
+                        (() => {
+                          const options = el.optionsText
+                            .split("\n")
+                            .map((o) => o.trim())
+                            .filter(Boolean);
+                          return (
+                            // Just the real, working preview here — no inline options editor
+                            // cluttering the field itself anymore; that's all moved into the
+                            // floating DropdownEditToolbar that appears when this is selected
+                            // (field name, options, colors, alignment, font size,
+                            // multi-select/required), the same way TextEditToolbar handles a
+                            // selected text box. The border is always visible (not just on
+                            // hover, like the other form fields) — it previews the field's
+                            // real border color, which is baked into the saved PDF too.
+                            <div
+                              className="flex h-full w-full items-center rounded px-1.5"
+                              style={{ border: `1px solid ${el.borderColor}` }}
+                            >
+                              <select
+                                value={el.selectedValue && options.includes(el.selectedValue) ? el.selectedValue : ""}
+                                onChange={(event) => updateElement(el.id, { selectedValue: event.target.value })}
+                                onFocus={() => {
+                                  pushHistory();
+                                  setSelectedElementId(el.id);
+                                }}
+                                onPointerDown={(event) => event.stopPropagation()}
+                                className="w-full min-w-0 flex-1 border-none bg-transparent outline-none"
+                                style={{ color: el.textColor, fontSize: el.fontSizePt * scale, textAlign: el.align }}
+                              >
+                                <option value="" disabled>
+                                  {options.length > 0 ? "Choose default..." : "No options yet"}
+                                </option>
+                                {options.map((option) => (
+                                  <option key={option} value={option}>
+                                    {option}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })()}
 
                       {el.type === "form-radio" && (
                         <div className="flex h-full w-full items-center gap-1 rounded border-2 border-dashed border-secondary bg-secondary/10 px-1.5">
@@ -2602,18 +2977,18 @@ export function PdfEditorWorkspace() {
                         </div>
                       )}
 
-                      {/* Text used to only get the bottom-right handle — every other
-                          drag target simply did nothing, which is what made resizing
-                          feel broken. All 8 now feed startElementResize the same way
-                          the other element types' handles already did — and none of
-                          them are drawn anymore; they're invisible strips right on the
-                          selection outline below, so there's no fat square sitting on
-                          top of (and hiding) small text. */}
-                      {RESIZE_HANDLES.map((h) => (
+                      {/* Text has no resize handles at all — its size only changes via
+                          the floating TextEditToolbar's own control now (dragging on
+                          canvas repeatedly flickered/felt wrong no matter how the math
+                          was tuned); only drag-to-move is left for it here. Every other
+                          element type still gets all 8, drawn as invisible strips right
+                          on the selection outline rather than a fat visible square. */}
+                      {el.type !== "text" &&
+                        RESIZE_HANDLES.map((h) => (
                         <div
                           key={h.dir}
                           onPointerDown={(event) => startElementResize(el, event, h.dir)}
-                          title={el.type === "text" ? "Drag to resize text" : "Drag to resize"}
+                          title="Drag to resize"
                           style={{ touchAction: "none" }}
                           className={`absolute z-10 ${h.className} ${h.cursor} ${
                             el.id === selectedElementId ? "block" : "hidden group-hover:block"
@@ -2658,6 +3033,43 @@ export function PdfEditorWorkspace() {
                   onUpdate={(patch) => updateElement(selectedLineElement.id, patch)}
                   onDuplicate={() => duplicateLineElement(selectedLineElement)}
                   onDelete={() => removeElement(selectedLineElement.id)}
+                />
+              )}
+
+              {selectedDropdownElement && (
+                <DropdownEditToolbar
+                  key={selectedDropdownElement.id}
+                  element={selectedDropdownElement}
+                  topPt={selectedDropdownElement.yPt}
+                  heightPt={selectedDropdownElement.heightPt}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedDropdownElement.id, patch)}
+                  onDuplicate={() => duplicateDropdownElement(selectedDropdownElement)}
+                  onDelete={() => removeElement(selectedDropdownElement.id)}
+                />
+              )}
+
+              {selectedFormTextElement && (
+                <FormTextEditToolbar
+                  key={selectedFormTextElement.id}
+                  element={selectedFormTextElement}
+                  topPt={selectedFormTextElement.yPt}
+                  heightPt={selectedFormTextElement.heightPt}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedFormTextElement.id, patch)}
+                  onDuplicate={() => duplicateFormTextElement(selectedFormTextElement)}
+                  onDelete={() => removeElement(selectedFormTextElement.id)}
+                />
+              )}
+
+              {selectedImageElement && (
+                <ImageEditToolbar
+                  key={selectedImageElement.id}
+                  element={selectedImageElement}
+                  scale={scale}
+                  onUpdate={(patch) => updateElement(selectedImageElement.id, patch)}
+                  onDuplicate={() => duplicateImageElement(selectedImageElement)}
+                  onDelete={() => removeElement(selectedImageElement.id)}
                 />
               )}
               </div>

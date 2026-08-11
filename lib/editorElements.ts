@@ -50,6 +50,10 @@ export type EditorElement =
       heightPt: number;
       dataUrl: string;
       mimeType: "image/png" | "image/jpeg";
+      /** Clockwise degrees, as shown on screen — matches CSS's rotate()
+       *  direction. pdf-lib's own rotation is counter-clockwise in PDF
+       *  space, so the save step negates this before handing it off. */
+      rotationDeg: number;
     }
   | {
       id: string;
@@ -100,6 +104,24 @@ export type EditorElement =
       fieldName: string;
       defaultValue: string;
       multiline: boolean;
+      /** True for a field auto-detected from the uploaded PDF's own AcroForm
+       *  (already has a widget placed on the page in the original file) — at
+       *  save time this means updating that field's value in place rather
+       *  than creating a new field and adding a second, duplicate widget. */
+      isExisting: boolean;
+      /** Black or white, picked once from the page's actual background color
+       *  right under this field (not the app's own light/dark theme, which
+       *  has nothing to do with what color the PDF page itself happens to
+       *  be) — so typed text stays readable whether it's sitting on a plain
+       *  white page or a dark/colored one. User-overridable from the
+       *  toolbar's font color picker, same as form-dropdown's. */
+      textColor: string;
+      /** The field's own visible border, baked into the saved PDF's widget
+       *  appearance (not just an editor-only outline) — same as form-dropdown's. */
+      borderColor: string;
+      fontSizePt: number;
+      align: "left" | "center" | "right";
+      required: boolean;
     }
   | {
       id: string;
@@ -120,8 +142,24 @@ export type EditorElement =
       widthPt: number;
       heightPt: number;
       fieldName: string;
-      /** Comma-separated for simple inline editing — split into options at save time. */
-      optionsCsv: string;
+      /** One option per line — split into options at save time. */
+      optionsText: string;
+      /** Which option is pre-selected when the PDF is opened — empty means none. */
+      selectedValue: string;
+      /** Same per-field adaptive black/white pick as form-text's textColor —
+       *  sampled once from the page's actual background under the field, but
+       *  user-overridable from the toolbar's font color picker. */
+      textColor: string;
+      /** The field's own visible border, baked into the saved PDF's widget
+       *  appearance (not just an editor-only outline). */
+      borderColor: string;
+      fontSizePt: number;
+      /** Editor-preview only (CSS text-align) — pdf-lib has no alignment
+       *  control for dropdown/choice fields, only text fields, so this can't
+       *  be carried into the saved PDF's own appearance. */
+      align: "left" | "center" | "right";
+      multiSelect: boolean;
+      required: boolean;
     }
   | {
       id: string;
