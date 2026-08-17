@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ToolIcon } from "./icons";
 import { OfficeConvertWorkspace } from "./OfficeConvertWorkspace";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { ConvertError, captureUrlToPdf } from "@/lib/convertClient";
 import { describeError } from "@/lib/errorHelpers";
 
@@ -18,12 +19,14 @@ export function HtmlToPdfWorkspace() {
   const [errorMessage, setErrorMessage] = useState("");
   const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<{ downloadUrl: string; filename: string } | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     setResult(null);
     setStatus("idle");
     setErrorMessage("");
     setErrorCode(undefined);
+    setShowSuccessModal(false);
   }
 
   async function handleCapture() {
@@ -36,6 +39,7 @@ export function HtmlToPdfWorkspace() {
       const converted = await captureUrlToPdf(url.trim(), setStatusMessage);
       setResult(converted);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? error.message : "Couldn't convert this page."));
@@ -45,6 +49,14 @@ export function HtmlToPdfWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && result && (
+        <SaveSuccessModal
+          downloadUrl={result.downloadUrl}
+          downloadFileName={result.filename}
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="flex gap-2">
         <button
           type="button"

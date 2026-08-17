@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
@@ -14,6 +15,7 @@ export function RepairWorkspace() {
   const [errorMessage, setErrorMessage] = useState("");
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
@@ -21,6 +23,7 @@ export function RepairWorkspace() {
     setPageCount(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   function loadFile(selected: File) {
@@ -65,6 +68,7 @@ export function RepairWorkspace() {
       setDownloadUrl(url);
       setPageCount(recoveredPages);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't repair this PDF: ${error.message}` : "Couldn't repair this PDF — it may be too damaged to recover.",));
@@ -112,6 +116,14 @@ export function RepairWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="repaired.pdf"
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name="file" className="h-4 w-4 text-primary" />

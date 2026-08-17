@@ -3,9 +3,15 @@ import { UploadDropzone } from "./UploadDropzone";
 import { ToolSteps } from "./ToolSteps";
 import { ToolFaq } from "./ToolFaq";
 import { RecentToolTracker } from "./RecentToolTracker";
+import { ToolIcon } from "./icons";
+import { getToolStatusMap } from "@/lib/appSettings";
 import type { Tool } from "@/lib/tools";
 
-export function ToolPageLayout({
+// The one place all ~44 tool pages route through (every app/<slug>/page.tsx
+// is a thin `<ToolPageLayout tool={tool} workspace={<XWorkspace/>} />`
+// wrapper) — checking the admin-set disabled flag here applies it to every
+// tool at once instead of editing each page.tsx individually.
+export async function ToolPageLayout({
   tool,
   workspace,
   maxWidthClassName = "max-w-4xl",
@@ -14,6 +20,8 @@ export function ToolPageLayout({
   workspace?: React.ReactNode;
   maxWidthClassName?: string;
 }) {
+  const toolStatus = (await getToolStatusMap())[tool.slug];
+
   return (
     <div>
       <RecentToolTracker slug={tool.slug} />
@@ -57,7 +65,21 @@ export function ToolPageLayout({
 
       <section className="relative overflow-hidden bg-base-200 pt-4 pb-16 sm:pb-20">
         <div className={`relative mx-auto px-4 sm:px-8 ${maxWidthClassName}`}>
-          <div className="-mt-4">{workspace ?? <UploadDropzone accept={tool.accept} actionLabel={tool.name} />}</div>
+          <div className="-mt-4">
+            {toolStatus?.disabled ? (
+              <div className="card flex flex-col items-center gap-3 border border-warning/30 bg-base-100 py-10 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/10 text-warning">
+                  <ToolIcon name="bolt" className="h-6 w-6" />
+                </span>
+                <p className="font-medium text-base-content">This tool is temporarily unavailable.</p>
+                <p className="max-w-sm text-sm text-base-content/60">
+                  {toolStatus.message || "We're working on it — please check back soon."}
+                </p>
+              </div>
+            ) : (
+              workspace ?? <UploadDropzone accept={tool.accept} actionLabel={tool.name} />
+            )}
+          </div>
         </div>
 
         <svg

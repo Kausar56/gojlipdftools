@@ -65,3 +65,36 @@ drop trigger if exists blog_posts_set_updated_at on public.blog_posts;
 create trigger blog_posts_set_updated_at
   before update on public.blog_posts
   for each row execute function public.set_updated_at();
+
+-- Scheduled publishing: a post can be queued to auto-publish at a future
+-- time without a cron job or edge function — publish_due_posts() below is
+-- called from the blog read paths (see lib/blog.ts) and lazily flips
+-- anything whose time has arrived to 'published' on the next page load.
+alter table public.blog_posts add column if not exists scheduled_at timestamptz;
+
+alter table public.blog_posts drop constraint if exists blog_posts_status_check;
+alter table public.blog_posts add constraint blog_posts_status_check
+  check (status in ('draft', 'scheduled', 'published'));
+
+create index if not exists blog_posts_scheduled_idx
+  on public.blog_posts (scheduled_at)
+  where status = 'scheduled';
+
+-- A scheduled post whose time has passed is publicly readable even before
+-- the lazy flip above runs (the two are kept in sync — same condition).
+drop policy if exists "Public can read published posts" on public.blog_posts;
+create policy "Public can read published posts"
+  on public.blog_posts for select
+  using (status = 'published' or (status = 'scheduled' and scheduled_at <= now()));
+
+create or replace function public.publish_due_posts()
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.blog_posts
+  set status = 'published', published_at = scheduled_at
+  where status = 'scheduled' and scheduled_at <= now();
+end;
+$$;

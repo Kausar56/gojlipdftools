@@ -4,21 +4,28 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { hasPermission, type ViewerAccess } from "@/lib/permissions";
 import { ToolIcon } from "./icons";
 
 // Add more sections here as the admin area grows — each just needs its own
-// app/admin/<slug>/page.tsx.
-const NAV_ITEMS = [
-  { href: "/admin", label: "Dashboard", icon: "grid" },
-  { href: "/admin/users", label: "Users", icon: "users" },
-  { href: "/admin/stats", label: "Statistics", icon: "chart" },
-  { href: "/admin/blog", label: "Blog", icon: "file" },
+// app/admin/<slug>/page.tsx (with its own guard at the top, since a
+// moderator could still reach the URL directly even with no sidebar link to
+// it — `check` here only controls whether the link is *shown*).
+const NAV_ITEMS: { href: string; label: string; icon: string; check: (access: ViewerAccess) => boolean }[] = [
+  { href: "/admin", label: "Dashboard", icon: "grid", check: (access) => hasPermission(access, "dashboard:view") },
+  { href: "/admin/users", label: "Users", icon: "users", check: (access) => access.kind === "admin" },
+  { href: "/admin/stats", label: "Statistics", icon: "chart", check: (access) => hasPermission(access, "stats:view") },
+  { href: "/admin/blog", label: "Blog", icon: "file", check: (access) => access.kind !== "none" },
+  { href: "/admin/moderators", label: "Moderators", icon: "shield", check: (access) => access.kind === "admin" },
+  { href: "/admin/settings", label: "Settings", icon: "settings", check: (access) => access.kind === "admin" },
+  { href: "/admin/audit-log", label: "Audit Log", icon: "history", check: (access) => access.kind === "admin" },
 ];
 
-export function AdminSidebar({ email }: { email: string }) {
+export function AdminSidebar({ email, access }: { email: string; access: ViewerAccess }) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const navItems = NAV_ITEMS.filter((item) => item.check(access));
 
   async function handleLogout() {
     setOpen(false);
@@ -69,7 +76,7 @@ export function AdminSidebar({ email }: { email: string }) {
         </Link>
 
         <nav className="flex-1 space-y-1">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active = item.href === "/admin" ? pathname === "/admin" : pathname?.startsWith(item.href);
             return (
               <Link
@@ -91,6 +98,7 @@ export function AdminSidebar({ email }: { email: string }) {
           <p className="truncate text-xs text-base-content/50" title={email}>
             {email}
           </p>
+          {access.kind === "moderator" && <span className="badge badge-neutral badge-xs mt-1">Moderator</span>}
           <div className="mt-2 flex flex-col gap-1">
             <Link href="/dashboard" onClick={() => setOpen(false)} className="text-xs text-primary hover:underline">
               Back to your dashboard

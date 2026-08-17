@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { describeError } from "@/lib/errorHelpers";
 
 type FileItem = {
@@ -29,6 +30,7 @@ export function MergePdfWorkspace() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -41,6 +43,7 @@ export function MergePdfWorkspace() {
     setDownloadUrl(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   function isPdfFile(file: File): boolean {
@@ -219,6 +222,7 @@ export function MergePdfWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       if (error instanceof UnreadablePdfError) {
@@ -231,6 +235,15 @@ export function MergePdfWorkspace() {
 
   return (
     <div className="card p-6">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="merged.pdf"
+          onClose={() => setShowSuccessModal(false)}
+          recommendedSlugs={["compress-pdf", "protect-pdf", "split-pdf", "organize"]}
+        />
+      )}
+
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {

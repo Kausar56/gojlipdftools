@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getAdminStats } from "@/lib/adminStats";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { AdminStatsView } from "@/components/AdminStatsView";
 import { describeError } from "@/lib/errorHelpers";
 
@@ -7,6 +9,9 @@ export const metadata: Metadata = { title: "Statistics" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminStatsPage() {
+  const { access } = await getCurrentViewerAccess();
+  if (!hasPermission(access, "stats:view")) redirect("/admin/blog");
+
   try {
     const stats = await getAdminStats();
     return <AdminStatsView stats={stats} />;

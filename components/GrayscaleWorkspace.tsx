@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { describeError } from "@/lib/errorHelpers";
 
@@ -23,12 +24,14 @@ export function GrayscaleWorkspace() {
   const [progressLabel, setProgressLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   function loadFile(selected: File) {
@@ -59,15 +62,27 @@ export function GrayscaleWorkspace() {
         const ctx = canvas.getContext("2d");
         if (!ctx) continue;
 
-        // Desaturating the canvas before pdf.js paints onto it turns
-        // everything it draws — text, vector shapes, and embedded images
-        // alike — grayscale in one pass, rather than needing to separately
-        // rewrite every color operator in the page's content stream and
-        // re-encode every embedded image.
-        ctx.filter = "grayscale(100%)";
+        // Setting ctx.filter before rendering doesn't work — pdf.js's own
+        // CanvasGraphics resets the context's filter (and other state) back
+        // to "none" as part of its render setup, silently discarding
+        // whatever filter was set beforehand. Rendering in color first and
+        // desaturating the resulting pixels afterward sidesteps that
+        // entirely, and handles text, vector shapes, and embedded images
+        // alike in one pass, without needing to rewrite the page's content
+        // stream or re-encode every embedded image.
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+        for (let i = 0; i < pixels.length; i += 4) {
+          // ITU-R BT.601 luma weights — the standard perceptual grayscale
+          // conversion (matches what CSS's grayscale() filter approximates).
+          const gray = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
+          pixels[i] = pixels[i + 1] = pixels[i + 2] = gray;
+        }
+        ctx.putImageData(imageData, 0, 0);
 
         const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", jpegQuality));
         if (!blob) continue;
@@ -83,6 +98,7 @@ export function GrayscaleWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't convert this PDF: ${error.message}` : "Couldn't convert this PDF to grayscale.",));
@@ -130,6 +146,14 @@ export function GrayscaleWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="grayscale.pdf"
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name="grayscale" className="h-4 w-4 text-secondary" />

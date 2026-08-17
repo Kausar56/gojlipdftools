@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { describeError } from "@/lib/errorHelpers";
 
 type ImageItem = {
@@ -19,6 +20,7 @@ export function JpgToPdfWorkspace() {
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const itemsRef = useRef(items);
   itemsRef.current = items;
@@ -37,6 +39,7 @@ export function JpgToPdfWorkspace() {
     setDownloadUrl(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   function addFiles(fileList: FileList | null) {
@@ -98,6 +101,7 @@ export function JpgToPdfWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error
@@ -114,33 +118,19 @@ export function JpgToPdfWorkspace() {
     setStatus("idle");
     setErrorMessage("");
     setProgress({ current: 0, total: 0 });
-  }
-
-  if (status === "done" && downloadUrl) {
-    return (
-      <div className="card border border-base-300 bg-base-100 p-10 text-center shadow-sm">
-        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-success/10 text-success">
-          <ToolIcon name="check" className="h-7 w-7" />
-        </span>
-        <h2 className="mt-4 text-lg font-semibold text-base-content">Your PDF is ready</h2>
-        <p className="mt-1 text-sm text-base-content/60">
-          {items.length} image{items.length === 1 ? "" : "s"} combined into one PDF.
-        </p>
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <a href={downloadUrl} download="images.pdf" className="btn btn-primary">
-            <ToolIcon name="download" className="h-4 w-4" />
-            Download PDF
-          </a>
-          <button type="button" onClick={convertAgain} className="btn btn-outline">
-            Convert Again
-          </button>
-        </div>
-      </div>
-    );
+    setShowSuccessModal(false);
   }
 
   return (
     <div className="card p-6">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="images.pdf"
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
@@ -228,14 +218,26 @@ export function JpgToPdfWorkspace() {
       )}
 
       <div className="mt-5">
-        <button
-          type="button"
-          onClick={handleConvert}
-          disabled={items.length === 0 || status === "converting"}
-          className="btn btn-primary w-full"
-        >
-          {status === "converting" ? "Converting..." : "Convert to PDF"}
-        </button>
+        {status === "done" && downloadUrl ? (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <a href={downloadUrl} download="images.pdf" className="btn btn-primary flex-1">
+              <ToolIcon name="download" className="h-4 w-4" />
+              Download PDF
+            </a>
+            <button type="button" onClick={convertAgain} className="btn btn-outline flex-1">
+              Convert Again
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleConvert}
+            disabled={items.length === 0 || status === "converting"}
+            className="btn btn-primary w-full"
+          >
+            {status === "converting" ? "Converting..." : "Convert to PDF"}
+          </button>
+        )}
       </div>
     </div>
   );

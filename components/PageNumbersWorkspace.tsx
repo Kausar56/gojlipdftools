@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { PagePreviewPicker, type PositionPct } from "./PagePreviewPicker";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
@@ -30,12 +31,14 @@ export function PageNumbersWorkspace() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   function loadFile(selected: File) {
@@ -89,6 +92,7 @@ export function PageNumbersWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't add page numbers: ${error.message}` : "Couldn't add page numbers to this PDF.",));
@@ -136,6 +140,14 @@ export function PageNumbersWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="numbered.pdf"
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name="text-multiline" className="h-4 w-4 text-primary" />

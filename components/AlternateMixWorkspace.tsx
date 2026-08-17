@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
@@ -25,12 +26,14 @@ export function AlternateMixWorkspace() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   async function loadSlot(setSlot: (slot: SlotState) => void, selected: File) {
@@ -82,6 +85,7 @@ export function AlternateMixWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't combine these files: ${error.message}` : "Couldn't combine these files.",));
@@ -161,6 +165,14 @@ export function AlternateMixWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="alternated.pdf"
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {renderSlot("Document 1", slotA, setSlotA, inputRefA)}
         {renderSlot("Document 2", slotB, setSlotB, inputRefB)}

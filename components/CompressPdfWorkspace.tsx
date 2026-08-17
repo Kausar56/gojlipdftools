@@ -5,6 +5,7 @@ import type { PDFRef } from "pdf-lib";
 import Link from "next/link";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { formatBytes } from "@/lib/format";
 import { describeError } from "@/lib/errorHelpers";
 import { ConvertError, optimizePdfViaCloudConvert, type OptimizeProfile } from "@/lib/convertClient";
@@ -42,6 +43,7 @@ export function CompressPdfWorkspace() {
   const [downloadFilename, setDownloadFilename] = useState("compressed.pdf");
   const [resultSize, setResultSize] = useState<number | null>(null);
   const [lowSavings, setLowSavings] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     if (downloadUrl && downloadUrl.startsWith("blob:")) URL.revokeObjectURL(downloadUrl);
@@ -53,6 +55,7 @@ export function CompressPdfWorkspace() {
     setStatusMessage("");
     setErrorMessage("");
     setErrorCode(undefined);
+    setShowSuccessModal(false);
   }
 
   function loadFile(selected: File) {
@@ -77,6 +80,7 @@ export function CompressPdfWorkspace() {
           setLowSavings(result.sizeBytes > file.size * 0.95);
         }
         setStatus("done");
+        setShowSuccessModal(true);
       } catch (error) {
         setStatus("error");
         setErrorMessage(describeError(error, error instanceof Error ? error.message : "Couldn't compress this PDF."));
@@ -174,6 +178,7 @@ export function CompressPdfWorkspace() {
       setResultSize(outBytes.length);
       setLowSavings(outBytes.length > file.size * 0.95);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error
@@ -223,6 +228,15 @@ export function CompressPdfWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName={downloadFilename}
+          onClose={() => setShowSuccessModal(false)}
+          recommendedSlugs={["merge-pdf", "protect-pdf", "watermark-pdf", "split-pdf"]}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name="compress" className="h-4 w-4 text-accent" />

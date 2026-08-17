@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { ConvertError, convertViaCloudConvert } from "@/lib/convertClient";
 import { describeError } from "@/lib/errorHelpers";
 
@@ -29,12 +30,14 @@ export function OfficeConvertWorkspace({
   const [errorMessage, setErrorMessage] = useState("");
   const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
   const [result, setResult] = useState<{ downloadUrl: string; filename: string } | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     setResult(null);
     setStatus("idle");
     setErrorMessage("");
     setErrorCode(undefined);
+    setShowSuccessModal(false);
   }
 
   function loadFile(selected: File) {
@@ -52,6 +55,9 @@ export function OfficeConvertWorkspace({
       const converted = await convertViaCloudConvert(file, inputFormat, outputFormat, setStatusMessage);
       setResult(converted);
       setStatus("done");
+      // A page preview only makes sense when the output is actually a PDF —
+      // this same component also backs pdf-to-word/excel/ppt routes.
+      if (outputFormat === "pdf") setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? error.message : "Couldn't convert this file."));
@@ -107,6 +113,14 @@ export function OfficeConvertWorkspace({
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && result && (
+        <SaveSuccessModal
+          downloadUrl={result.downloadUrl}
+          downloadFileName={result.filename}
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name={icon} className="h-4 w-4 text-primary" />

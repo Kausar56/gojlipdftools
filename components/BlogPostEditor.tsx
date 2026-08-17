@@ -1,16 +1,45 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useActionState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
-import Image from "@tiptap/extension-image";
-import Placeholder from "@tiptap/extension-placeholder";
-import { ToolIcon } from "./icons";
+import dynamic from "next/dynamic";
+import "react-quill-new/dist/quill.snow.css";
+import type { Quill } from "react-quill-new";
 import { slugify } from "@/lib/blogSlug";
 import type { BlogPost } from "@/lib/blog";
 import type { ActionState } from "@/app/admin/blog/actions";
+
+// Quill reads from `document` as soon as it's constructed, so it can't run
+// during SSR — Next still does a first server-side pass even for a "use
+// client" component, so this still needs the dynamic()+ssr:false wrapper.
+const QuillEditor = dynamic(() => import("react-quill-new"), {
+  ssr: false,
+  loading: () => <div className="min-h-85 animate-pulse rounded-lg border border-base-300 bg-base-200" />,
+});
+
+// Capped to h1-h3 (rather than Quill's default up to h6) to match what
+// sanitizeHtml's allowlist keeps in app/admin/blog/actions.ts — picking h4-h6
+// here would silently get stripped down to a plain paragraph on save.
+const QUILL_TOOLBAR = [
+  [{ header: [1, 2, 3, false] }],
+  ["bold", "italic", "underline", "strike"],
+  ["blockquote", "code-block"],
+  [{ list: "ordered" }, { list: "bullet" }],
+  ["link", "image"],
+  ["clean"],
+];
+const QUILL_FORMATS = [
+  "header",
+  "bold",
+  "italic",
+  "underline",
+  "strike",
+  "blockquote",
+  "code-block",
+  "list",
+  "link",
+  "image",
+];
 
 async function uploadImage(file: File): Promise<{ url: string; publicId: string }> {
   const sigRes = await fetch("/api/admin/blog/upload-signature", { method: "POST" });
@@ -44,7 +73,6 @@ export function BlogPostEditor({
   action: (prevState: ActionState, formData: FormData) => Promise<ActionState>;
 }) {
   const thumbnailInputRef = useRef<HTMLInputElement>(null);
-  const contentImageInputRef = useRef<HTMLInputElement>(null);
   const [state, formAction, isPending] = useActionState<ActionState, FormData>(action, {});
 
   const [title, setTitle] = useState(post?.title ?? "");
@@ -54,7 +82,15 @@ export function BlogPostEditor({
   const [metaTitle, setMetaTitle] = useState(post?.metaTitle ?? "");
   const [metaDescription, setMetaDescription] = useState(post?.metaDescription ?? "");
   const [tags, setTags] = useState((post?.tags ?? []).join(", "));
-  const [status, setStatus] = useState<"draft" | "published">(post?.status ?? "draft");
+  const [status, setStatus] = useState<"draft" | "scheduled" | "published">(post?.status ?? "draft");
+  const [scheduledAt, setScheduledAt] = useState(() => {
+    if (!post?.scheduledAt) return "";
+    // <input type="datetime-local"> wants "YYYY-MM-DDTHH:mm" in local time —
+    // toISOString() is UTC, so trim its offset-free local equivalent instead.
+    const date = new Date(post.scheduledAt);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  });
   const [thumbnailUrl, setThumbnailUrl] = useState(post?.thumbnailUrl ?? "");
   const [thumbnailPublicId, setThumbnailPublicId] = useState(post?.thumbnailPublicId ?? "");
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
@@ -64,18 +100,6 @@ export function BlogPostEditor({
   useEffect(() => {
     if (!slugTouched) setSlug(slugify(title));
   }, [title, slugTouched]);
-
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit,
-      Link.configure({ openOnClick: false, autolink: true }),
-      Image,
-      Placeholder.configure({ placeholder: "Write your post..." }),
-    ],
-    content: post?.contentHtml ?? "",
-    onUpdate: ({ editor }) => setContentHtml(editor.getHTML()),
-  });
 
   async function handleThumbnailFile(file: File) {
     setThumbnailUploading(true);
@@ -91,25 +115,43 @@ export function BlogPostEditor({
     }
   }
 
-  async function handleContentImageFile(file: File) {
-    setUploadError("");
-    try {
-      const { url } = await uploadImage(file);
-      editor?.chain().focus().setImage({ src: url }).run();
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Couldn't upload the image.");
-    }
-  }
-
-  function setLink() {
-    const url = window.prompt("Link URL");
-    if (url === null) return;
-    if (!url) {
-      editor?.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-    editor?.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }
+  // Stable across renders (empty deps) — react-quill-new tears down and
+  // recreates the whole Quill instance whenever this object's identity
+  // changes, which would reset the cursor/undo history on every keystroke
+  // if it were rebuilt on each render instead.
+  const modules = useMemo(
+    () => ({
+      toolbar: {
+        container: QUILL_TOOLBAR,
+        handlers: {
+          // A regular function (not an arrow function) — Quill calls this
+          // with `this` bound to the toolbar module, which is how `this.quill`
+          // below gets the actual editor instance without needing a ref.
+          image(this: { quill: Quill }) {
+            const quill = this.quill;
+            const range = quill.getSelection(true);
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*";
+            input.onchange = async () => {
+              const file = input.files?.[0];
+              if (!file) return;
+              setUploadError("");
+              try {
+                const { url } = await uploadImage(file);
+                quill.insertEmbed(range.index, "image", url, "user");
+                quill.setSelection(range.index + 1, 0, "user");
+              } catch (error) {
+                setUploadError(error instanceof Error ? error.message : "Couldn't upload the image.");
+              }
+            };
+            input.click();
+          },
+        },
+      },
+    }),
+    [],
+  );
 
   return (
     <form action={formAction} className="space-y-5">
@@ -243,66 +285,14 @@ export function BlogPostEditor({
 
       <div>
         <p className="text-sm font-medium text-base-content">Content</p>
-        <div className="mt-1.5 rounded-lg border border-base-300">
-          <div className="flex flex-wrap items-center gap-1 border-b border-base-300 p-1.5">
-            <button type="button" onClick={() => editor?.chain().focus().toggleBold().run()} className={`btn btn-ghost btn-xs ${editor?.isActive("bold") ? "btn-active" : ""}`}>
-              <ToolIcon name="bold" className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().toggleItalic().run()} className={`btn btn-ghost btn-xs ${editor?.isActive("italic") ? "btn-active" : ""}`}>
-              <ToolIcon name="italic" className="h-3.5 w-3.5" />
-            </button>
-            <span className="mx-0.5 h-4 w-px bg-base-300" />
-            <button type="button" onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()} className={`btn btn-ghost btn-xs ${editor?.isActive("heading", { level: 1 }) ? "btn-active" : ""}`}>
-              H1
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()} className={`btn btn-ghost btn-xs ${editor?.isActive("heading", { level: 2 }) ? "btn-active" : ""}`}>
-              H2
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().toggleHeading({ level: 3 }).run()} className={`btn btn-ghost btn-xs ${editor?.isActive("heading", { level: 3 }) ? "btn-active" : ""}`}>
-              H3
-            </button>
-            <span className="mx-0.5 h-4 w-px bg-base-300" />
-            <button type="button" onClick={() => editor?.chain().focus().toggleBulletList().run()} className={`btn btn-ghost btn-xs ${editor?.isActive("bulletList") ? "btn-active" : ""}`}>
-              • List
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().toggleOrderedList().run()} className={`btn btn-ghost btn-xs ${editor?.isActive("orderedList") ? "btn-active" : ""}`}>
-              1. List
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().toggleBlockquote().run()} className={`btn btn-ghost btn-xs ${editor?.isActive("blockquote") ? "btn-active" : ""}`}>
-              Quote
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().toggleCodeBlock().run()} className={`btn btn-ghost btn-xs ${editor?.isActive("codeBlock") ? "btn-active" : ""}`}>
-              Code
-            </button>
-            <span className="mx-0.5 h-4 w-px bg-base-300" />
-            <button type="button" onClick={setLink} className={`btn btn-ghost btn-xs ${editor?.isActive("link") ? "btn-active" : ""}`}>
-              <ToolIcon name="link" className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" onClick={() => contentImageInputRef.current?.click()} className="btn btn-ghost btn-xs">
-              <ToolIcon name="image-to-pdf" className="h-3.5 w-3.5" />
-            </button>
-            <input
-              ref={contentImageInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (file) handleContentImageFile(file);
-              }}
-            />
-            <span className="mx-0.5 h-4 w-px bg-base-300" />
-            <button type="button" onClick={() => editor?.chain().focus().undo().run()} className="btn btn-ghost btn-xs">
-              <ToolIcon name="undo" className="h-3.5 w-3.5" />
-            </button>
-            <button type="button" onClick={() => editor?.chain().focus().redo().run()} className="btn btn-ghost btn-xs">
-              <ToolIcon name="redo" className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <EditorContent
-            editor={editor}
-            className="prose prose-sm max-w-none min-h-[300px] px-4 py-3 focus:outline-none [&_.ProseMirror]:min-h-[280px] [&_.ProseMirror]:outline-none"
+        <div className="mt-1.5 [&_.ql-editor]:min-h-70 [&_.ql-editor]:text-sm [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg">
+          <QuillEditor
+            theme="snow"
+            defaultValue={post?.contentHtml ?? ""}
+            onChange={setContentHtml}
+            modules={modules}
+            formats={QUILL_FORMATS}
+            placeholder="Write your post..."
           />
         </div>
       </div>
@@ -310,7 +300,7 @@ export function BlogPostEditor({
       <div>
         <p className="text-sm font-medium text-base-content">Status</p>
         <div className="mt-1.5 flex gap-2">
-          {(["draft", "published"] as const).map((value) => (
+          {(["draft", "scheduled", "published"] as const).map((value) => (
             <button
               key={value}
               type="button"
@@ -322,6 +312,23 @@ export function BlogPostEditor({
           ))}
         </div>
         <input type="hidden" name="status" value={status} />
+
+        {status === "scheduled" && (
+          <label className="mt-3 block text-sm font-medium text-base-content">
+            Publish at
+            <input
+              type="datetime-local"
+              name="scheduledAt"
+              required
+              value={scheduledAt}
+              onChange={(event) => setScheduledAt(event.target.value)}
+              className="input input-bordered mt-1.5 w-full sm:max-w-xs"
+            />
+            <span className="mt-1 block text-xs text-base-content/50">
+              Goes live automatically once this time passes — in your browser&apos;s local time.
+            </span>
+          </label>
+        )}
       </div>
 
       {uploadError && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{uploadError}</p>}

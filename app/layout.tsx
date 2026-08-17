@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter, Noto_Sans_Bengali, Space_Grotesk } from "next/font/google";
 import { SiteChrome } from "@/components/SiteChrome";
+import { SiteBanner } from "@/components/SiteBanner";
+import { getBannerSettings } from "@/lib/appSettings";
 import "./globals.css";
 
 const inter = Inter({
@@ -57,11 +59,13 @@ export const metadata: Metadata = {
 // the user explicitly picks it via ThemeToggle (saved to localStorage).
 const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');}catch(e){}})();`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const banner = await getBannerSettings();
+
   return (
     <html
       lang="en"
@@ -72,6 +76,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="flex min-h-full flex-col">
+        <SiteBanner banner={banner} />
         <SiteChrome>{children}</SiteChrome>
       </body>
     </html>

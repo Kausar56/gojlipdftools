@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
+import { SaveSuccessModal } from "./SaveSuccessModal";
 import { loadPdfjs } from "@/lib/pdfjs";
 import { describeError } from "@/lib/errorHelpers";
 import { colorSwatches, hexToRgbFloat, resolveSwatchHex } from "@/lib/colorSwatches";
@@ -80,12 +81,14 @@ export function HeaderFooterWorkspace() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   function resetOutput() {
     if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     setDownloadUrl(null);
     setStatus("idle");
     setErrorMessage("");
+    setShowSuccessModal(false);
   }
 
   async function loadFile(selected: File) {
@@ -244,6 +247,7 @@ export function HeaderFooterWorkspace() {
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
       setStatus("done");
+      setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
       setErrorMessage(describeError(error, error instanceof Error ? `Couldn't add header/footer: ${error.message}` : "Couldn't add a header or footer to this PDF.",));
@@ -360,6 +364,14 @@ export function HeaderFooterWorkspace() {
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
+      {showSuccessModal && downloadUrl && (
+        <SaveSuccessModal
+          downloadUrl={downloadUrl}
+          downloadFileName="header-footer.pdf"
+          onClose={() => setShowSuccessModal(false)}
+        />
+      )}
+
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="flex items-center gap-2 truncate">
           <ToolIcon name="text-multiline" className="h-4 w-4 text-secondary" />
