@@ -1,22 +1,25 @@
 "use server";
 
 import { revalidatePath, updateTag } from "next/cache";
-import { getCurrentViewerAccess } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { logAdminAction } from "@/lib/auditLog";
 import { sanitizeRichTextHtml } from "@/lib/sanitizeRichText";
 import { setToolContentOverride, resetToolContentOverride, type ToolContentOverride } from "@/lib/toolContent";
 import { getToolBySlug } from "@/lib/tools";
 
-// Global, cross-visitor content shown on the public tool page — not
-// something a moderator's blog-scoped permissions should extend to.
-async function requireFullAdmin() {
+// Global, cross-visitor content shown on the public tool page — a real
+// admin always has it; a moderator needs the "tool_content:edit" permission
+// granted explicitly (see app/admin/moderators). Unlike blog, there's no
+// "own content only" restriction here — a moderator with this permission
+// can edit any tool's guide/FAQ.
+async function requireToolContentAccess() {
   const { user, access } = await getCurrentViewerAccess();
-  if (!user || access.kind !== "admin") throw new Error("Not authorized.");
+  if (!user || !hasPermission(access, "tool_content:edit")) throw new Error("Not authorized.");
   return user;
 }
 
 export async function updateToolContent(slug: string, formData: FormData) {
-  const user = await requireFullAdmin();
+  const user = await requireToolContentAccess();
   if (!getToolBySlug(slug)) throw new Error("Unknown tool.");
 
   const guideTitle = String(formData.get("guideTitle") ?? "").trim();
@@ -50,7 +53,7 @@ export async function updateToolContent(slug: string, formData: FormData) {
 }
 
 export async function resetToolContent(slug: string) {
-  const user = await requireFullAdmin();
+  const user = await requireToolContentAccess();
 
   await resetToolContentOverride(slug);
   await logAdminAction({

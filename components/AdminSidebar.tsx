@@ -20,7 +20,7 @@ const NAV_ITEMS: { href: string; label: string; icon: string; check: (access: Vi
     href: "/admin/tool-content",
     label: "Tool Content",
     icon: "text-multiline",
-    check: (access) => access.kind === "admin",
+    check: (access) => hasPermission(access, "tool_content:edit"),
   },
   { href: "/admin/moderators", label: "Moderators", icon: "shield", check: (access) => access.kind === "admin" },
   { href: "/admin/settings", label: "Settings", icon: "settings", check: (access) => access.kind === "admin" },

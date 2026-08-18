@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { getCurrentViewerAccess } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { createUploadSignature } from "@/lib/cloudinary";
 
-// Tool-content editing is admin-only (see app/admin/tool-content/actions.ts)
-// — same restriction here, not the broader "any moderator" check some other
-// admin API routes use.
+// Same permission gate as app/admin/tool-content/actions.ts — a real admin
+// always has it, a moderator needs "tool_content:edit" granted explicitly.
 export async function POST() {
   try {
     const { access } = await getCurrentViewerAccess();
-    if (access.kind !== "admin") {
+    if (!hasPermission(access, "tool_content:edit")) {
       return NextResponse.json({ error: "Not authorized." }, { status: 403 });
     }
   } catch {

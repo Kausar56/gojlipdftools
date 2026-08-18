@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { getCurrentViewerAccess } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { getToolBySlug } from "@/lib/tools";
 import { getEffectiveToolContent, getToolContentOverrideForEdit } from "@/lib/toolContent";
 import { ToolContentEditor } from "@/components/ToolContentEditor";
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function EditToolContentPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { access } = await getCurrentViewerAccess();
-  if (access.kind !== "admin") redirect("/admin/blog");
+  if (!hasPermission(access, "tool_content:edit")) redirect("/admin/blog");
 
   const tool = getToolBySlug(slug);
   if (!tool) notFound();

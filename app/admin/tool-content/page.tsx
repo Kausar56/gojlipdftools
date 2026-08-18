@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { getCurrentViewerAccess } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { tools } from "@/lib/tools";
 import { ToolContentList } from "@/components/ToolContentList";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ToolContentListPage() {
   const { access } = await getCurrentViewerAccess();
-  if (access.kind !== "admin") redirect("/admin/blog");
+  if (!hasPermission(access, "tool_content:edit")) redirect("/admin/blog");
 
   let customizedSlugs: string[] = [];
   try {

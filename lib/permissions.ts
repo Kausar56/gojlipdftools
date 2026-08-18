@@ -8,6 +8,7 @@ export const MODERATOR_PERMISSIONS = [
   { key: "blog:delete_own", label: "Delete their own blog posts" },
   { key: "dashboard:view", label: "View the admin dashboard" },
   { key: "stats:view", label: "View site statistics" },
+  { key: "tool_content:edit", label: "Edit tool guide/FAQ content" },
 ] as const;
 
 export type ModeratorPermission = (typeof MODERATOR_PERMISSIONS)[number]["key"];
