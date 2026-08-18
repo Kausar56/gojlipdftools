@@ -1,6 +1,9 @@
 "use client";
 
+import { useTransition } from "react";
+import toast from "react-hot-toast";
 import type { BannerSettings } from "@/lib/appSettings";
+import { describeError } from "@/lib/errorHelpers";
 
 export function BannerEditor({
   banner,
@@ -9,8 +12,28 @@ export function BannerEditor({
   banner: BannerSettings | null;
   action: (formData: FormData) => void | Promise<void>;
 }) {
+  const [isPending, startTransition] = useTransition();
+
+  // Manual submit, not a plain <form action={fn}> — React resets the form's
+  // DOM state the instant it submits (requestFormReset), snapping the
+  // "active" checkbox back to whatever it was when this component first
+  // mounted even though the save went through (a reload shows the right
+  // value). Same fix already applied to ToolStatusManager/AdminUsersTable.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(async () => {
+      try {
+        await action(formData);
+        toast.success("Banner saved.");
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't save the banner."));
+      }
+    });
+  }
+
   return (
-    <form action={action} className="max-w-lg space-y-4 rounded-lg border border-base-300 bg-base-100 p-4">
+    <form onSubmit={handleSubmit} className="max-w-lg space-y-4 rounded-lg border border-base-300 bg-base-100 p-4">
       <label className="block text-sm font-medium text-base-content">
         Message
         <textarea
@@ -36,8 +59,8 @@ export function BannerEditor({
         Show this banner on every page
       </label>
 
-      <button type="submit" className="btn btn-primary btn-sm w-full">
-        Save Banner
+      <button type="submit" disabled={isPending} className="btn btn-primary btn-sm w-full">
+        {isPending ? "Saving..." : "Save Banner"}
       </button>
     </form>
   );

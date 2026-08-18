@@ -16,9 +16,15 @@ export default async function EditBlogPostPage({ params }: { params: Promise<{ i
 
   const { user, access } = await getCurrentViewerAccess();
   const isOwnPost = post.authorId === user?.id;
-  const canEdit = access.kind === "admin" || (hasPermission(access, "blog:edit_own") && isOwnPost);
+  const canEdit =
+    access.kind === "admin" ||
+    hasPermission(access, "blog:edit_any") ||
+    (hasPermission(access, "blog:edit_own") && isOwnPost);
   if (!canEdit) redirect("/admin/blog");
-  const canDelete = access.kind === "admin" || (hasPermission(access, "blog:delete_own") && isOwnPost);
+  const canDelete =
+    access.kind === "admin" ||
+    hasPermission(access, "blog:delete_any") ||
+    (hasPermission(access, "blog:delete_own") && isOwnPost);
 
   const updateWithId = updatePost.bind(null, id);
   const deleteWithId = deletePost.bind(null, id);

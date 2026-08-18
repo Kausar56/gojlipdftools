@@ -1,13 +1,20 @@
 import { createClient } from "./supabase/server";
 import { createAdminClient } from "./supabase/admin";
-import { type ViewerAccess, isModeratorPermission, hasPermission } from "./permissions";
+import {
+  type ViewerAccess,
+  type ModeratorRole,
+  isModeratorPermission,
+  isModeratorRole,
+  hasPermission,
+  hasAnyBlogPermission,
+} from "./permissions";
 
 // Re-exported so existing call sites (`import { hasPermission, type
 // ViewerAccess } from "@/lib/adminAuth"`) keep working — the canonical
 // definitions live in lib/permissions.ts so Client Components (e.g.
 // AdminSidebar) can import them without pulling in this file's server-only
 // Supabase clients.
-export { hasPermission, type ViewerAccess };
+export { hasPermission, hasAnyBlogPermission, type ViewerAccess, type ModeratorRole };
 
 /**
  * Admin access is intentionally NOT a database role or a `profiles` column —
@@ -42,11 +49,15 @@ export async function resolveViewerAccess(
   if (isAdminEmail(user.email)) return { kind: "admin", userId: user.id, email: user.email ?? "" };
 
   const admin = createAdminClient();
-  const { data } = await admin.from("moderators").select("permissions").eq("id", user.id).maybeSingle();
+  const { data } = await admin.from("moderators").select("permissions, role").eq("id", user.id).maybeSingle();
   if (!data) return { kind: "none" };
 
   const permissions = ((data.permissions ?? []) as string[]).filter(isModeratorPermission);
-  return { kind: "moderator", userId: user.id, email: user.email ?? "", permissions };
+  // Rows granted before the `role` column existed have no value here yet —
+  // "moderator" was the only kind of grant back then, so that's the honest default.
+  const roleValue = data.role as string | null;
+  const role: ModeratorRole = roleValue && isModeratorRole(roleValue) ? roleValue : "moderator";
+  return { kind: "moderator", userId: user.id, email: user.email ?? "", role, permissions };
 }
 
 /** The one place every admin page/Server Action gets "who is this and what
@@ -67,4 +78,24 @@ export async function getCurrentViewerAccess(): Promise<{
     : null;
   const access = await resolveViewerAccess(user);
   return { user, access };
+}
+
+/**
+ * Where to send a viewer who just failed a specific admin page's permission
+ * check. Every one of those pages used to hardcode `redirect("/admin/blog")`
+ * as if every moderator was guaranteed to have some blog permission — once a
+ * moderator could be granted e.g. only "stats:view" with no blog access at
+ * all, that assumption broke: they'd bounce onto a blog page they also can't
+ * see. Picking the first section this viewer actually has access to (falling
+ * back to their regular user dashboard if they have none of these) keeps
+ * every one of those redirects landing somewhere real instead of another
+ * dead end.
+ */
+export function getFallbackAdminPath(access: ViewerAccess): string {
+  if (hasPermission(access, "dashboard:view")) return "/admin";
+  if (hasAnyBlogPermission(access)) return "/admin/blog";
+  if (hasPermission(access, "stats:view")) return "/admin/stats";
+  if (hasPermission(access, "tool_content:edit")) return "/admin/tool-content";
+  if (access.kind === "admin") return "/admin";
+  return "/dashboard";
 }

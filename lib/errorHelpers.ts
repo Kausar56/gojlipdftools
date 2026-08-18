@@ -26,3 +26,19 @@ export function describeError(error: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+/**
+ * A Server Action that calls `redirect()`/`notFound()` internally throws a
+ * special error carrying a `NEXT_REDIRECT`/`NEXT_HTTP_ERROR_FALLBACK;404`
+ * digest to signal Next.js's router — normally invisible since it's thrown
+ * from inside the framework's own `<form action={fn}>` plumbing, but once an
+ * action is called manually (e.g. wrapped in try/catch to show a toast on
+ * failure) that throw reaches the catch block too. Re-throwing it there (see
+ * every toast-wrapped admin action in this app) lets Next.js's own boundary
+ * still perform the redirect instead of it being swallowed as a real error.
+ */
+export function isRedirectError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("digest" in error)) return false;
+  const digest = (error as { digest?: unknown }).digest;
+  return typeof digest === "string" && (digest.startsWith("NEXT_REDIRECT") || digest.startsWith("NEXT_HTTP_ERROR_FALLBACK"));
+}

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentViewerAccess } from "@/lib/adminAuth";
 import { logAdminAction } from "@/lib/auditLog";
-import { isModeratorPermission, type ModeratorPermission } from "@/lib/permissions";
+import { isModeratorPermission, isModeratorRole, type ModeratorPermission } from "@/lib/permissions";
 
 // Only a real admin (never a moderator) can grant, change, or revoke
 // moderator access — moderators can't manage each other or themselves.
@@ -21,16 +21,22 @@ function parsePermissions(formData: FormData): ModeratorPermission[] {
     .filter((value): value is ModeratorPermission => isModeratorPermission(value));
 }
 
+function parseRole(formData: FormData) {
+  const value = String(formData.get("role") ?? "");
+  return isModeratorRole(value) ? value : "moderator";
+}
+
 export async function grantModerator(formData: FormData) {
   const admin_user = await requireFullAdmin();
   const userId = String(formData.get("userId") ?? "").trim();
   if (!userId) throw new Error("Choose a user first.");
   const permissions = parsePermissions(formData);
+  const role = parseRole(formData);
 
   const admin = createAdminClient();
   const { error } = await admin
     .from("moderators")
-    .upsert({ id: userId, permissions, granted_by: admin_user.id });
+    .upsert({ id: userId, permissions, role, granted_by: admin_user.id });
   if (error) throw new Error(error.message);
 
   await logAdminAction({
@@ -39,7 +45,7 @@ export async function grantModerator(formData: FormData) {
     action: "moderator.grant",
     targetType: "user",
     targetId: userId,
-    details: { permissions },
+    details: { role, permissions },
   });
 
   revalidatePath("/admin/moderators");
@@ -48,9 +54,10 @@ export async function grantModerator(formData: FormData) {
 export async function updateModeratorPermissions(userId: string, formData: FormData) {
   const admin_user = await requireFullAdmin();
   const permissions = parsePermissions(formData);
+  const role = parseRole(formData);
 
   const admin = createAdminClient();
-  const { error } = await admin.from("moderators").update({ permissions }).eq("id", userId);
+  const { error } = await admin.from("moderators").update({ permissions, role }).eq("id", userId);
   if (error) throw new Error(error.message);
 
   await logAdminAction({
@@ -59,7 +66,7 @@ export async function updateModeratorPermissions(userId: string, formData: FormD
     action: "moderator.update",
     targetType: "user",
     targetId: userId,
-    details: { permissions },
+    details: { role, permissions },
   });
 
   revalidatePath("/admin/moderators");

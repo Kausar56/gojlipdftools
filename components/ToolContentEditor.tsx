@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
+import toast from "react-hot-toast";
 import { RichTextEditor } from "./RichTextEditor";
 import { ToolIcon } from "./icons";
 import { uploadImageViaSignedEndpoint } from "@/lib/uploadImageClient";
+import { describeError } from "@/lib/errorHelpers";
 import type { Tool } from "@/lib/tools";
 import type { EffectiveToolContent } from "@/lib/toolContent";
 
@@ -34,21 +36,46 @@ export function ToolContentEditor({
   const [faqs, setFaqs] = useState<FaqState[]>(() =>
     initialContent.faqs.map((faq, i) => ({ id: `initial-faq-${i}`, question: faq.question, answerHtml: faq.answerHtml })),
   );
-  const [uploadError, setUploadError] = useState("");
+  const [isSaving, startSaving] = useTransition();
+  const [isResetting, startResetting] = useTransition();
 
   // useCallback (not a fresh closure per render) — RichTextEditor tears down
   // and recreates the whole Quill instance whenever this reference changes,
   // which would reset the cursor/undo history on every keystroke otherwise.
   const handleImageUpload = useCallback(async (file: File) => {
-    setUploadError("");
     try {
       const { url } = await uploadImageViaSignedEndpoint(file, "/api/admin/tool-content/upload-signature");
       return url;
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Couldn't upload the image.");
+      toast.error(error instanceof Error ? error.message : "Couldn't upload the image.");
       throw error;
     }
   }, []);
+
+  function handleSave(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startSaving(async () => {
+      try {
+        await updateAction(formData);
+        toast.success("Tool content saved.");
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't save this tool's content."));
+      }
+    });
+  }
+
+  function handleReset() {
+    if (!window.confirm(`Reset "${tool.name}" back to its default guide/FAQ content? This can't be undone.`)) return;
+    startResetting(async () => {
+      try {
+        await resetAction();
+        toast.success(`"${tool.name}" reset to its default content.`);
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't reset this tool's content."));
+      }
+    });
+  }
 
   function addFaq() {
     setFaqs((prev) => [...prev, { id: makeId(), question: "", answerHtml: "" }]);
@@ -71,7 +98,7 @@ export function ToolContentEditor({
 
   return (
     <div className="space-y-6">
-      <form action={updateAction} className="space-y-8">
+      <form onSubmit={handleSave} className="space-y-8">
         <input type="hidden" name="guideHtml" value={guideHtml} />
 
         <div>
@@ -162,26 +189,20 @@ export function ToolContentEditor({
           </div>
         </div>
 
-        {uploadError && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{uploadError}</p>}
-
-        <button type="submit" className="btn btn-primary w-full">
-          Save Changes
+        <button type="submit" disabled={isSaving} className="btn btn-primary w-full">
+          {isSaving ? "Saving..." : "Save Changes"}
         </button>
       </form>
 
       {hasOverride && (
-        <form
-          action={resetAction}
-          onSubmit={(event) => {
-            if (!window.confirm(`Reset "${tool.name}" back to its default guide/FAQ content? This can't be undone.`)) {
-              event.preventDefault();
-            }
-          }}
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={isResetting}
+          className="btn btn-outline btn-error btn-sm w-full"
         >
-          <button type="submit" className="btn btn-outline btn-error btn-sm w-full">
-            Reset to Default Content
-          </button>
-        </form>
+          {isResetting ? "Resetting..." : "Reset to Default Content"}
+        </button>
       )}
     </div>
   );

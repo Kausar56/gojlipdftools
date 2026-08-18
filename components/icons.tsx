@@ -430,6 +430,12 @@ const paths: Record<string, React.ReactNode> = {
   "align-left": <path d="M4 6h16M4 12h10M4 18h14" />,
   "align-center": <path d="M4 6h16M7 12h10M5 18h14" />,
   "align-right": <path d="M4 6h16M10 12h10M6 18h14" />,
+  ticket: (
+    <>
+      <path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.8a1.6 1.6 0 0 0 0 3.2V16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a1.6 1.6 0 0 0 0-3.2z" />
+      <path d="M12 6v1.5M12 10.5v3M12 16.5V18" strokeDasharray="1.6 1.8" />
+    </>
+  ),
 };
 
 export function ToolIcon({ name, className }: IconProps & { name: string }) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentViewerAccess } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { logAdminAction } from "@/lib/auditLog";
 import type { PlanId } from "@/lib/planLimits";
 
@@ -12,9 +12,13 @@ const VALID_PLANS: PlanId[] = ["free", "pro", "business"];
 // a boolean, so "banned" here means "for the next ~100 years."
 const BAN_DURATION = "876000h";
 
-async function requireFullAdmin() {
+// A real admin always qualifies (hasPermission's built-in bypass); a
+// moderator/staff member needs "users:manage" granted explicitly — plain
+// "users:view" only gets the read-only list, enforced again here since the
+// UI hiding these buttons isn't itself a security boundary.
+async function requireUserManagement() {
   const { user, access } = await getCurrentViewerAccess();
-  if (!user || access.kind !== "admin") throw new Error("Not authorized.");
+  if (!user || !hasPermission(access, "users:manage")) throw new Error("Not authorized.");
   return user;
 }
 
@@ -23,7 +27,7 @@ function assertNotSelf(actorId: string, targetUserId: string) {
 }
 
 export async function updateUserPlan(userId: string, formData: FormData) {
-  const actor = await requireFullAdmin();
+  const actor = await requireUserManagement();
   const plan = String(formData.get("plan") ?? "");
   if (!VALID_PLANS.includes(plan as PlanId)) throw new Error("Invalid plan.");
 
@@ -44,7 +48,7 @@ export async function updateUserPlan(userId: string, formData: FormData) {
 }
 
 export async function banUser(userId: string) {
-  const actor = await requireFullAdmin();
+  const actor = await requireUserManagement();
   assertNotSelf(actor.id, userId);
 
   const admin = createAdminClient();
@@ -57,7 +61,7 @@ export async function banUser(userId: string) {
 }
 
 export async function unbanUser(userId: string) {
-  const actor = await requireFullAdmin();
+  const actor = await requireUserManagement();
 
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
@@ -69,7 +73,7 @@ export async function unbanUser(userId: string) {
 }
 
 export async function deleteUserAccount(userId: string) {
-  const actor = await requireFullAdmin();
+  const actor = await requireUserManagement();
   assertNotSelf(actor.id, userId);
 
   const admin = createAdminClient();

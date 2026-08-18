@@ -1,7 +1,77 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import toast from "react-hot-toast";
 import type { TagUsage } from "@/lib/blogTags";
+import { describeError } from "@/lib/errorHelpers";
+
+function RenameTagForm({
+  tag,
+  renameAction,
+  onDone,
+}: {
+  tag: string;
+  renameAction: (oldTag: string, formData: FormData) => void | Promise<void>;
+  onDone: () => void;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(async () => {
+      try {
+        await renameAction(tag, formData);
+        toast.success(`Tag "${tag}" renamed.`);
+        onDone();
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't rename this tag."));
+      }
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-center gap-2">
+      <input type="text" name="newTag" defaultValue={tag} autoFocus className="input input-bordered input-xs" />
+      <button type="submit" disabled={isPending} className="btn btn-primary btn-xs">
+        {isPending ? "Saving..." : "Save"}
+      </button>
+      <button type="button" onClick={onDone} disabled={isPending} className="btn btn-ghost btn-xs">
+        Cancel
+      </button>
+    </form>
+  );
+}
+
+function DeleteTagButton({
+  tag,
+  count,
+  deleteAction,
+}: {
+  tag: string;
+  count: number;
+  deleteAction: (tag: string) => void | Promise<void>;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleClick() {
+    if (!window.confirm(`Remove tag "${tag}" from ${count} post(s)?`)) return;
+    startTransition(async () => {
+      try {
+        await deleteAction(tag);
+        toast.success(`Tag "${tag}" removed.`);
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't remove this tag."));
+      }
+    });
+  }
+
+  return (
+    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-error hover:underline">
+      Delete
+    </button>
+  );
+}
 
 export function TagManager({
   tags,
@@ -33,27 +103,7 @@ export function TagManager({
             <tr key={tag}>
               <td>
                 {editingTag === tag ? (
-                  <form
-                    action={(formData) => {
-                      renameAction(tag, formData);
-                      setEditingTag(null);
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <input
-                      type="text"
-                      name="newTag"
-                      defaultValue={tag}
-                      autoFocus
-                      className="input input-bordered input-xs"
-                    />
-                    <button type="submit" className="btn btn-primary btn-xs">
-                      Save
-                    </button>
-                    <button type="button" onClick={() => setEditingTag(null)} className="btn btn-ghost btn-xs">
-                      Cancel
-                    </button>
-                  </form>
+                  <RenameTagForm tag={tag} renameAction={renameAction} onDone={() => setEditingTag(null)} />
                 ) : (
                   tag
                 )}
@@ -65,18 +115,7 @@ export function TagManager({
                     <button type="button" onClick={() => setEditingTag(tag)} className="text-sm text-primary hover:underline">
                       Rename
                     </button>
-                    <form
-                      action={deleteAction.bind(null, tag)}
-                      onSubmit={(event) => {
-                        if (!window.confirm(`Remove tag "${tag}" from ${count} post(s)?`)) {
-                          event.preventDefault();
-                        }
-                      }}
-                    >
-                      <button type="submit" className="text-sm text-error hover:underline">
-                        Delete
-                      </button>
-                    </form>
+                    <DeleteTagButton tag={tag} count={count} deleteAction={deleteAction} />
                   </div>
                 )}
               </td>

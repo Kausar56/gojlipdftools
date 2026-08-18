@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
+import toast from "react-hot-toast";
 import { RichTextEditor } from "./RichTextEditor";
 import { slugify } from "@/lib/blogSlug";
 import { uploadImageViaSignedEndpoint } from "@/lib/uploadImageClient";
@@ -41,22 +42,29 @@ export function BlogPostEditor({
   const [thumbnailUrl, setThumbnailUrl] = useState(post?.thumbnailUrl ?? "");
   const [thumbnailPublicId, setThumbnailPublicId] = useState(post?.thumbnailPublicId ?? "");
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
   const [contentHtml, setContentHtml] = useState(post?.contentHtml ?? "");
 
   useEffect(() => {
     if (!slugTouched) setSlug(slugify(title));
   }, [title, slugTouched]);
 
+  // The action either redirects on success (see app/admin/blog/actions.ts)
+  // or returns { error } and re-renders this same page — a toast is the only
+  // feedback needed for the latter, there's nothing to show on success since
+  // the redirect already leaves this page.
+  useEffect(() => {
+    if (state.error) toast.error(state.error);
+  }, [state.error]);
+
   async function handleThumbnailFile(file: File) {
     setThumbnailUploading(true);
-    setUploadError("");
     try {
       const { url, publicId } = await uploadImage(file);
       setThumbnailUrl(url);
       setThumbnailPublicId(publicId);
+      toast.success("Thumbnail uploaded.");
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Couldn't upload the thumbnail.");
+      toast.error(error instanceof Error ? error.message : "Couldn't upload the thumbnail.");
     } finally {
       setThumbnailUploading(false);
     }
@@ -66,12 +74,11 @@ export function BlogPostEditor({
   // and recreates the whole Quill instance whenever this reference changes,
   // which would reset the cursor/undo history on every keystroke otherwise.
   const handleContentImageUpload = useCallback(async (file: File) => {
-    setUploadError("");
     try {
       const { url } = await uploadImage(file);
       return url;
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : "Couldn't upload the image.");
+      toast.error(error instanceof Error ? error.message : "Couldn't upload the image.");
       throw error;
     }
   }, []);
@@ -252,9 +259,6 @@ export function BlogPostEditor({
           </label>
         )}
       </div>
-
-      {uploadError && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{uploadError}</p>}
-      {state.error && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{state.error}</p>}
 
       <button type="submit" disabled={isPending} className="btn btn-primary w-full">
         {isPending ? "Saving..." : post ? "Save Changes" : "Create Post"}

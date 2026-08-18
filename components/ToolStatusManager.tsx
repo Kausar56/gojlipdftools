@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import toast from "react-hot-toast";
 import type { Tool } from "@/lib/tools";
 import type { ToolStatusMap } from "@/lib/appSettings";
+import { describeError } from "@/lib/errorHelpers";
 
 function ToolStatusRow({
   tool,
@@ -27,7 +29,12 @@ function ToolStatusRow({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     startTransition(async () => {
-      await action(formData);
+      try {
+        await action(formData);
+        toast.success(`${tool.name} ${disabled ? "disabled" : "enabled"}.`);
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't save this tool's status."));
+      }
     });
   }
 

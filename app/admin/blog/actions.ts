@@ -136,7 +136,10 @@ export async function updatePost(
       .maybeSingle();
 
     const isOwnPost = existing.data?.author_id === user.id;
-    const canEdit = access.kind === "admin" || (hasPermission(access, "blog:edit_own") && isOwnPost);
+    const canEdit =
+      access.kind === "admin" ||
+      hasPermission(access, "blog:edit_any") ||
+      (hasPermission(access, "blog:edit_own") && isOwnPost);
     if (!canEdit) throw new Error("You don't have permission to edit this post.");
 
     const fields = readFields(formData);
@@ -204,7 +207,10 @@ export async function deletePost(id: string) {
   const existing = await admin.from("blog_posts").select("thumbnail_public_id, author_id").eq("id", id).maybeSingle();
 
   const isOwnPost = existing.data?.author_id === user.id;
-  const canDelete = access.kind === "admin" || (hasPermission(access, "blog:delete_own") && isOwnPost);
+  const canDelete =
+    access.kind === "admin" ||
+    hasPermission(access, "blog:delete_any") ||
+    (hasPermission(access, "blog:delete_own") && isOwnPost);
   if (!canDelete) throw new Error("You don't have permission to delete this post.");
 
   const thumbnailPublicId = existing.data?.thumbnail_public_id ?? null;

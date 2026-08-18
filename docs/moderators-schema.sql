@@ -18,6 +18,17 @@ create table if not exists public.moderators (
   updated_at timestamptz not null default now()
 );
 
+-- Idempotent so re-running this file after the table already exists (e.g. an
+-- earlier version without this column) still picks it up. This is a label on
+-- top of `permissions`, not a separate authorization path — see
+-- lib/permissions.ts's MODERATOR_ROLE_PRESETS/hasPermission for how it's
+-- used. Existing rows default to 'moderator', the only kind of grant before
+-- Admin/Support existed.
+alter table public.moderators add column if not exists role text not null default 'moderator';
+alter table public.moderators drop constraint if exists moderators_role_check;
+alter table public.moderators add constraint moderators_role_check
+  check (role in ('admin', 'moderator', 'support'));
+
 alter table public.moderators enable row level security;
 
 -- Postgres has no "create policy if not exists", so drop-then-create to keep

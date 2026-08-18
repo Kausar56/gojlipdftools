@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getAllPostsForAdmin } from "@/lib/blog";
-import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
-import { DeletePostButton } from "@/components/DeletePostButton";
+import { getCurrentViewerAccess, hasPermission, hasAnyBlogPermission, getFallbackAdminPath } from "@/lib/adminAuth";
+import { AdminBlogTable } from "@/components/AdminBlogTable";
 import { deletePost } from "./actions";
 
 export const metadata: Metadata = { title: "Blog" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminBlogListPage() {
-  const [posts, { user, access }] = await Promise.all([getAllPostsForAdmin(), getCurrentViewerAccess()]);
+  const { user, access } = await getCurrentViewerAccess();
+  // A moderator granted some other permission (stats:view, tool_content:edit,
+  // ...) but no blog permission at all shouldn't be able to see this section
+  // just by knowing the URL — the sidebar link is hidden for them too, but
+  // that alone doesn't stop direct navigation.
+  if (!hasAnyBlogPermission(access)) redirect(getFallbackAdminPath(access));
+
+  const posts = await getAllPostsForAdmin();
   const canCreate = hasPermission(access, "blog:create");
 
   return (
@@ -35,77 +43,7 @@ export default async function AdminBlogListPage() {
         </p>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-lg border border-base-300 bg-base-100">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Author</th>
-              <th>Status</th>
-              <th>Updated</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {posts.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center text-base-content/50">
-                  No posts yet.
-                </td>
-              </tr>
-            ) : (
-              posts.map((post) => {
-                const isOwnPost = post.authorId === user?.id;
-                const canEdit = access.kind === "admin" || (hasPermission(access, "blog:edit_own") && isOwnPost);
-                const canDelete = access.kind === "admin" || (hasPermission(access, "blog:delete_own") && isOwnPost);
-                return (
-                  <tr key={post.id}>
-                    <td className="max-w-xs truncate">{post.title}</td>
-                    <td className="whitespace-nowrap text-sm text-base-content/70">
-                      {post.authorName ?? "—"}
-                      {isOwnPost && <span className="ml-1 text-xs text-base-content/40">(You)</span>}
-                    </td>
-                    <td>
-                      <span
-                        className={`badge badge-sm ${
-                          post.status === "published"
-                            ? "badge-primary"
-                            : post.status === "scheduled"
-                              ? "badge-secondary"
-                              : "badge-neutral"
-                        }`}
-                        title={post.status === "scheduled" && post.scheduledAt ? new Date(post.scheduledAt).toLocaleString() : undefined}
-                      >
-                        {post.status === "scheduled" && post.scheduledAt
-                          ? `Scheduled · ${new Date(post.scheduledAt).toLocaleDateString()}`
-                          : post.status}
-                      </span>
-                    </td>
-                    <td>{new Date(post.updatedAt).toLocaleDateString()}</td>
-                    <td className="text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        {canEdit ? (
-                          <Link href={`/admin/blog/${post.id}`} className="text-sm text-primary hover:underline">
-                            Edit
-                          </Link>
-                        ) : (
-                          <span className="text-sm text-base-content/30">Edit</span>
-                        )}
-                        {canDelete && (
-                          <DeletePostButton
-                            action={deletePost.bind(null, post.id)}
-                            className="text-sm text-error hover:underline"
-                          />
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      <AdminBlogTable posts={posts} currentUserId={user?.id ?? null} access={access} deleteAction={deletePost} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getUsersForAdmin } from "@/lib/userAdmin";
-import { getCurrentViewerAccess } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission, getFallbackAdminPath } from "@/lib/adminAuth";
 import { AdminUsersTable } from "@/components/AdminUsersTable";
 import { describeError } from "@/lib/errorHelpers";
 import { updateUserPlan, banUser, unbanUser, deleteUserAccount } from "./actions";
@@ -11,17 +11,23 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
   const { access } = await getCurrentViewerAccess();
-  if (access.kind !== "admin") redirect("/admin/blog");
+  // "users:manage" implies view too — an admin (or a moderator/staff member
+  // granted just that one permission, skipping "users:view") shouldn't get
+  // locked out of the list they're also allowed to act on.
+  const canManage = hasPermission(access, "users:manage");
+  const canView = canManage || hasPermission(access, "users:view");
+  if (!canView) redirect(getFallbackAdminPath(access));
 
   try {
     const users = await getUsersForAdmin();
     return (
       <AdminUsersTable
         users={users}
-        updatePlanAction={updateUserPlan}
-        banAction={banUser}
-        unbanAction={unbanUser}
-        deleteAction={deleteUserAccount}
+        canManage={canManage}
+        updatePlanAction={canManage ? updateUserPlan : undefined}
+        banAction={canManage ? banUser : undefined}
+        unbanAction={canManage ? unbanUser : undefined}
+        deleteAction={canManage ? deleteUserAccount : undefined}
       />
     );
   } catch (error) {

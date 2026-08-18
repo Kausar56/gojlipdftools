@@ -21,7 +21,8 @@ export default async function ModeratorsPage() {
     <div>
       <h1 className="text-2xl font-semibold text-base-content">Moderators</h1>
       <p className="mt-1 text-sm text-base-content/60">
-        Grant a signed-up user limited admin access — pick exactly which permissions they get when you add them.
+        Grant a signed-up user limited admin access as an Admin, Moderator, or Support role — pick a role for a
+        sensible starting set of permissions, then fine-tune exactly what they get.
       </p>
 
       <div className="mt-6">

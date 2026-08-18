@@ -1,13 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { isAdminEmail } from "@/lib/adminAuth";
+import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { createUploadSignature } from "@/lib/cloudinary";
 
+// Same permission gate as app/admin/blog/actions.ts's createPost/updatePost —
+// a real admin always has it, a moderator needs "blog:create" granted
+// explicitly. This used to only check isAdminEmail(), so a moderator with
+// full blog access still got "Not authorized." the moment they tried to
+// upload a thumbnail or an inline content image.
 export async function POST() {
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (!data.user || !isAdminEmail(data.user.email)) {
+    const { access } = await getCurrentViewerAccess();
+    if (!hasPermission(access, "blog:create")) {
       return NextResponse.json({ error: "Not authorized." }, { status: 403 });
     }
   } catch {

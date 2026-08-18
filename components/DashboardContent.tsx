@@ -144,6 +144,16 @@ export function DashboardContent({
       </section>
 
       <section className="mt-10">
+        <h2 className="text-lg font-semibold text-base-content">Need help?</h2>
+        <div className="mt-4 card flex flex-col gap-3 border border-base-300 bg-base-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-base-content/70">Open a support ticket and our team will get back to you.</p>
+          <Link href="/dashboard/tickets" className="btn btn-primary btn-sm shrink-0">
+            Create Ticket
+          </Link>
+        </div>
+      </section>
+
+      <section className="mt-10">
         <h2 className="text-lg font-semibold text-base-content">Account</h2>
         <form onSubmit={handleSave} className="mt-4 card border border-base-300 bg-base-100 p-6">
           <div className="grid gap-4 sm:grid-cols-2">

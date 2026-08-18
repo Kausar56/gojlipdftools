@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import toast from "react-hot-toast";
 import type { ManagedUser } from "@/lib/userAdmin";
 import type { PlanId } from "@/lib/planLimits";
+import { describeError, isRedirectError } from "@/lib/errorHelpers";
+import { PaginationControls } from "./PaginationControls";
 
 const PAGE_SIZE = 20;
 
@@ -27,11 +30,18 @@ function PlanSelect({
   // the action directly (no <form>) skips that reset.
   function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
     const value = event.target.value as PlanId;
+    const previous = plan;
     setPlan(value);
     const formData = new FormData();
     formData.set("plan", value);
     startTransition(async () => {
-      await updatePlanAction(user.id, formData);
+      try {
+        await updatePlanAction(user.id, formData);
+        toast.success(`${user.email}'s plan changed to ${value}.`);
+      } catch (error) {
+        setPlan(previous);
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't change the plan."));
+      }
     });
   }
 
@@ -49,18 +59,77 @@ function PlanSelect({
   );
 }
 
+function BanToggleButton({
+  user,
+  banAction,
+  unbanAction,
+}: {
+  user: ManagedUser;
+  banAction: (userId: string) => void | Promise<void>;
+  unbanAction: (userId: string) => void | Promise<void>;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleClick() {
+    startTransition(async () => {
+      try {
+        if (user.isBanned) {
+          await unbanAction(user.id);
+          toast.success(`${user.email} unbanned.`);
+        } else {
+          await banAction(user.id);
+          toast.success(`${user.email} banned.`);
+        }
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't update the ban status."));
+      }
+    });
+  }
+
+  return (
+    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-primary hover:underline">
+      {user.isBanned ? "Unban" : "Ban"}
+    </button>
+  );
+}
+
+function DeleteUserButton({ user, deleteAction }: { user: ManagedUser; deleteAction: (userId: string) => void | Promise<void> }) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleClick() {
+    if (!window.confirm(`Permanently delete ${user.email}? This can't be undone.`)) return;
+    startTransition(async () => {
+      try {
+        await deleteAction(user.id);
+        toast.success(`${user.email} deleted.`);
+      } catch (error) {
+        if (isRedirectError(error)) throw error;
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't delete this user."));
+      }
+    });
+  }
+
+  return (
+    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-error hover:underline">
+      Delete
+    </button>
+  );
+}
+
 export function AdminUsersTable({
   users,
+  canManage,
   updatePlanAction,
   banAction,
   unbanAction,
   deleteAction,
 }: {
   users: ManagedUser[];
-  updatePlanAction: (userId: string, formData: FormData) => void | Promise<void>;
-  banAction: (userId: string) => void | Promise<void>;
-  unbanAction: (userId: string) => void | Promise<void>;
-  deleteAction: (userId: string) => void | Promise<void>;
+  canManage: boolean;
+  updatePlanAction?: (userId: string, formData: FormData) => void | Promise<void>;
+  banAction?: (userId: string) => void | Promise<void>;
+  unbanAction?: (userId: string) => void | Promise<void>;
+  deleteAction?: (userId: string) => void | Promise<void>;
 }) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -77,6 +146,11 @@ export function AdminUsersTable({
     <div>
       <h1 className="text-2xl font-semibold text-base-content">Users</h1>
       <p className="mt-1 text-sm text-base-content/60">{users.length} accounts total.</p>
+      {!canManage && (
+        <p className="mt-1 text-xs text-base-content/50">
+          Read-only — plan changes, bans, and deletes are admin-only.
+        </p>
+      )}
 
       <input
         type="text"
@@ -97,13 +171,13 @@ export function AdminUsersTable({
               <th>Plan</th>
               <th>Joined</th>
               <th>Status</th>
-              <th />
+              {canManage && <th />}
             </tr>
           </thead>
           <tbody>
             {pageUsers.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center text-base-content/50">
+                <td colSpan={canManage ? 5 : 4} className="text-center text-base-content/50">
                   No users match.
                 </td>
               </tr>
@@ -112,7 +186,11 @@ export function AdminUsersTable({
                 <tr key={user.id}>
                   <td className="max-w-48 truncate">{user.email}</td>
                   <td>
-                    <PlanSelect user={user} updatePlanAction={updatePlanAction} />
+                    {canManage && updatePlanAction ? (
+                      <PlanSelect user={user} updatePlanAction={updatePlanAction} />
+                    ) : (
+                      <span className="badge badge-neutral badge-sm capitalize">{user.plan}</span>
+                    )}
                   </td>
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
@@ -122,27 +200,14 @@ export function AdminUsersTable({
                       <span className="badge badge-ghost badge-sm">Active</span>
                     )}
                   </td>
-                  <td className="text-right">
-                    <div className="flex items-center justify-end gap-3">
-                      <form action={(user.isBanned ? unbanAction : banAction).bind(null, user.id)}>
-                        <button type="submit" className="text-sm text-primary hover:underline">
-                          {user.isBanned ? "Unban" : "Ban"}
-                        </button>
-                      </form>
-                      <form
-                        action={deleteAction.bind(null, user.id)}
-                        onSubmit={(event) => {
-                          if (!window.confirm(`Permanently delete ${user.email}? This can't be undone.`)) {
-                            event.preventDefault();
-                          }
-                        }}
-                      >
-                        <button type="submit" className="text-sm text-error hover:underline">
-                          Delete
-                        </button>
-                      </form>
-                    </div>
-                  </td>
+                  {canManage && banAction && unbanAction && deleteAction && (
+                    <td className="text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        <BanToggleButton user={user} banAction={banAction} unbanAction={unbanAction} />
+                        <DeleteUserButton user={user} deleteAction={deleteAction} />
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -150,29 +215,12 @@ export function AdminUsersTable({
         </table>
       </div>
 
-      {pageCount > 1 && (
-        <div className="mt-3 flex items-center justify-center gap-3 text-sm">
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
-            className="btn btn-ghost btn-xs"
-          >
-            Previous
-          </button>
-          <span className="text-base-content/60">
-            Page {currentPage + 1} of {pageCount}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-            disabled={currentPage === pageCount - 1}
-            className="btn btn-ghost btn-xs"
-          >
-            Next
-          </button>
-        </div>
-      )}
+      <PaginationControls
+        currentPage={currentPage}
+        pageCount={pageCount}
+        onPrevious={() => setPage((p) => Math.max(0, p - 1))}
+        onNext={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+      />
     </div>
   );
 }

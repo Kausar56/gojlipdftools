@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { hasPermission, type ViewerAccess } from "@/lib/permissions";
+import { hasPermission, hasAnyBlogPermission, MODERATOR_ROLE_LABELS, type ViewerAccess } from "@/lib/permissions";
 import { ToolIcon } from "./icons";
 
 // Add more sections here as the admin area grows — each just needs its own
@@ -13,9 +13,15 @@ import { ToolIcon } from "./icons";
 // it — `check` here only controls whether the link is *shown*).
 const NAV_ITEMS: { href: string; label: string; icon: string; check: (access: ViewerAccess) => boolean }[] = [
   { href: "/admin", label: "Dashboard", icon: "grid", check: (access) => hasPermission(access, "dashboard:view") },
-  { href: "/admin/users", label: "Users", icon: "users", check: (access) => access.kind === "admin" },
+  {
+    href: "/admin/users",
+    label: "Users",
+    icon: "users",
+    check: (access) => hasPermission(access, "users:view") || hasPermission(access, "users:manage"),
+  },
   { href: "/admin/stats", label: "Statistics", icon: "chart", check: (access) => hasPermission(access, "stats:view") },
-  { href: "/admin/blog", label: "Blog", icon: "file", check: (access) => access.kind !== "none" },
+  { href: "/admin/tickets", label: "Tickets", icon: "ticket", check: (access) => hasPermission(access, "tickets:manage") },
+  { href: "/admin/blog", label: "Blog", icon: "file", check: (access) => hasAnyBlogPermission(access) },
   {
     href: "/admin/tool-content",
     label: "Tool Content",
@@ -24,7 +30,12 @@ const NAV_ITEMS: { href: string; label: string; icon: string; check: (access: Vi
   },
   { href: "/admin/moderators", label: "Moderators", icon: "shield", check: (access) => access.kind === "admin" },
   { href: "/admin/settings", label: "Settings", icon: "settings", check: (access) => access.kind === "admin" },
-  { href: "/admin/audit-log", label: "Audit Log", icon: "history", check: (access) => access.kind === "admin" },
+  {
+    href: "/admin/audit-log",
+    label: "Audit Log",
+    icon: "history",
+    check: (access) => hasPermission(access, "audit_log:view_own"),
+  },
 ];
 
 export function AdminSidebar({ email, access }: { email: string; access: ViewerAccess }) {
@@ -104,7 +115,10 @@ export function AdminSidebar({ email, access }: { email: string; access: ViewerA
           <p className="truncate text-xs text-base-content/50" title={email}>
             {email}
           </p>
-          {access.kind === "moderator" && <span className="badge badge-neutral badge-xs mt-1">Moderator</span>}
+          {access.kind === "admin" && <span className="badge badge-primary badge-xs mt-1">Super Admin</span>}
+          {access.kind === "moderator" && (
+            <span className="badge badge-neutral badge-xs mt-1">{MODERATOR_ROLE_LABELS[access.role]}</span>
+          )}
           <div className="mt-2 flex flex-col gap-1">
             <Link href="/dashboard" onClick={() => setOpen(false)} className="text-xs text-primary hover:underline">
               Back to your dashboard
