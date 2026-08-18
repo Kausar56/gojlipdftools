@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { Tool } from "@/lib/tools";
 import type { ToolStatusMap } from "@/lib/appSettings";
 
@@ -14,9 +14,25 @@ function ToolStatusRow({
   action: (formData: FormData) => void | Promise<void>;
 }) {
   const [disabled, setDisabled] = useState(status?.disabled ?? false);
+  const [isPending, startTransition] = useTransition();
+
+  // Submitting via a plain <form action={fn}> makes React reset the form's
+  // DOM state the instant it's submitted (requestFormReset) — for a
+  // controlled checkbox that desyncs the visible checkmark from the actual
+  // `disabled` state without triggering a re-render to fix it, so it looks
+  // like the toggle "un-disabled" itself even though the save succeeded (a
+  // reload shows the correct value). Handling submit manually and calling
+  // the action ourselves skips that reset entirely.
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    startTransition(async () => {
+      await action(formData);
+    });
+  }
 
   return (
-    <form action={action} className="flex flex-col gap-2 border-b border-base-200 py-3 last:border-0 sm:flex-row sm:items-center">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 border-b border-base-200 py-3 last:border-0 sm:flex-row sm:items-center">
       <label className="flex w-56 shrink-0 items-center gap-2 text-sm text-base-content">
         <input
           type="checkbox"
@@ -34,8 +50,8 @@ function ToolStatusRow({
         placeholder="Optional message shown to visitors while disabled"
         className="input input-bordered input-sm flex-1"
       />
-      <button type="submit" className="btn btn-outline btn-sm">
-        Save
+      <button type="submit" disabled={isPending} className="btn btn-outline btn-sm">
+        {isPending ? "Saving..." : "Save"}
       </button>
     </form>
   );

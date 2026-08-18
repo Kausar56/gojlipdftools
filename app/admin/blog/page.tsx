@@ -40,6 +40,7 @@ export default async function AdminBlogListPage() {
           <thead>
             <tr>
               <th>Title</th>
+              <th>Author</th>
               <th>Status</th>
               <th>Updated</th>
               <th />
@@ -48,7 +49,7 @@ export default async function AdminBlogListPage() {
           <tbody>
             {posts.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center text-base-content/50">
+                <td colSpan={5} className="text-center text-base-content/50">
                   No posts yet.
                 </td>
               </tr>
@@ -60,6 +61,10 @@ export default async function AdminBlogListPage() {
                 return (
                   <tr key={post.id}>
                     <td className="max-w-xs truncate">{post.title}</td>
+                    <td className="whitespace-nowrap text-sm text-base-content/70">
+                      {post.authorName ?? "—"}
+                      {isOwnPost && <span className="ml-1 text-xs text-base-content/40">(You)</span>}
+                    </td>
                     <td>
                       <span
                         className={`badge badge-sm ${

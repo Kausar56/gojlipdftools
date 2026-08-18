@@ -1,12 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { ManagedUser } from "@/lib/userAdmin";
+import type { PlanId } from "@/lib/planLimits";
 
 const PAGE_SIZE = 20;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function PlanSelect({
+  user,
+  updatePlanAction,
+}: {
+  user: ManagedUser;
+  updatePlanAction: (userId: string, formData: FormData) => void | Promise<void>;
+}) {
+  const [plan, setPlan] = useState(user.plan);
+  const [isPending, startTransition] = useTransition();
+
+  // A <select> inside <form action={fn}> that auto-submits on change gets
+  // reset to its defaultValue the instant it submits (React's
+  // requestFormReset), snapping the dropdown back to the old plan even
+  // though the save went through — a reload shows the correct plan. Calling
+  // the action directly (no <form>) skips that reset.
+  function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const value = event.target.value as PlanId;
+    setPlan(value);
+    const formData = new FormData();
+    formData.set("plan", value);
+    startTransition(async () => {
+      await updatePlanAction(user.id, formData);
+    });
+  }
+
+  return (
+    <select
+      value={plan}
+      onChange={handleChange}
+      disabled={isPending}
+      className="select select-bordered select-xs capitalize"
+    >
+      <option value="free">Free</option>
+      <option value="pro">Pro</option>
+      <option value="business">Business</option>
+    </select>
+  );
 }
 
 export function AdminUsersTable({
@@ -72,18 +112,7 @@ export function AdminUsersTable({
                 <tr key={user.id}>
                   <td className="max-w-48 truncate">{user.email}</td>
                   <td>
-                    <form action={updatePlanAction.bind(null, user.id)}>
-                      <select
-                        name="plan"
-                        defaultValue={user.plan}
-                        onChange={(event) => event.currentTarget.form?.requestSubmit()}
-                        className="select select-bordered select-xs capitalize"
-                      >
-                        <option value="free">Free</option>
-                        <option value="pro">Pro</option>
-                        <option value="business">Business</option>
-                      </select>
-                    </form>
+                    <PlanSelect user={user} updatePlanAction={updatePlanAction} />
                   </td>
                   <td>{formatDate(user.createdAt)}</td>
                   <td>

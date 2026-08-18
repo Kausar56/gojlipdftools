@@ -9,5 +9,5 @@ const tool = getToolBySlug("create-forms")!;
 export const metadata: Metadata = toolMetadata(tool);
 
 export default function CreateFormsPage() {
-  return <ToolPageLayout tool={tool} workspace={<CreateFormsWorkspace />} />;
+  return <ToolPageLayout tool={tool} maxWidthClassName="max-w-7xl" workspace={<CreateFormsWorkspace />} />;
 }

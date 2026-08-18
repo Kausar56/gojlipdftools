@@ -1,28 +1,29 @@
 "use client";
 
 import { useRef, useState } from "react";
+import type { PDFPage } from "pdf-lib";
 import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { SaveSuccessModal } from "./SaveSuccessModal";
 import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
-type Order = "a-first" | "b-first";
+type PageOrder = "regular" | "reverse";
 
-type SlotState = {
-  file: File | null;
+type FileEntry = {
+  id: string;
+  file: File;
   pageCount: number | null;
+  order: PageOrder;
 };
 
-const emptySlot: SlotState = { file: null, pageCount: null };
-
 export function AlternateMixWorkspace() {
-  const inputRefA = useRef<HTMLInputElement>(null);
-  const inputRefB = useRef<HTMLInputElement>(null);
-  const [slotA, setSlotA] = useState<SlotState>(emptySlot);
-  const [slotB, setSlotB] = useState<SlotState>(emptySlot);
-  const [order, setOrder] = useState<Order>("a-first");
-  const [reverseB, setReverseB] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const nextId = useRef(0);
+  const makeId = () => `file-${nextId.current++}`;
+
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [switchAfter, setSwitchAfter] = useState(1);
   const [status, setStatus] = useState<Status>("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -36,48 +37,98 @@ export function AlternateMixWorkspace() {
     setShowSuccessModal(false);
   }
 
-  async function loadSlot(setSlot: (slot: SlotState) => void, selected: File) {
+  async function addFiles(selected: File[]) {
+    if (selected.length === 0) return;
     resetOutput();
-    setSlot({ file: selected, pageCount: null });
-    try {
-      const { PDFDocument } = await import("pdf-lib");
-      const doc = await PDFDocument.load(await selected.arrayBuffer());
-      setSlot({ file: selected, pageCount: doc.getPageCount() });
-    } catch (error) {
-      setStatus("error");
-      setErrorMessage(describeError(error, "Couldn't read this file — make sure it's a valid PDF."));
+    const entries: FileEntry[] = selected.map((file) => ({
+      id: makeId(),
+      file,
+      pageCount: null,
+      order: "regular",
+    }));
+    setFiles((current) => [...current, ...entries]);
+
+    const { PDFDocument } = await import("pdf-lib");
+    for (const entry of entries) {
+      try {
+        const doc = await PDFDocument.load(await entry.file.arrayBuffer());
+        const count = doc.getPageCount();
+        setFiles((current) => current.map((f) => (f.id === entry.id ? { ...f, pageCount: count } : f)));
+      } catch (error) {
+        setStatus("error");
+        setErrorMessage(describeError(error, `Couldn't read "${entry.file.name}" — make sure it's a valid PDF.`));
+      }
     }
   }
 
-  async function handleMerge() {
-    if (!slotA.file || !slotB.file) return;
+  function removeFile(id: string) {
+    setFiles((current) => current.filter((f) => f.id !== id));
+    resetOutput();
+  }
+
+  function moveFile(id: string, direction: -1 | 1) {
+    setFiles((current) => {
+      const index = current.findIndex((f) => f.id === id);
+      const target = index + direction;
+      if (index === -1 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    resetOutput();
+  }
+
+  function setOrderFor(id: string, order: PageOrder) {
+    setFiles((current) => current.map((f) => (f.id === id ? { ...f, order } : f)));
+    resetOutput();
+  }
+
+  function sortFiles(direction: "asc" | "desc") {
+    setFiles((current) =>
+      [...current].sort((a, b) =>
+        direction === "asc" ? a.file.name.localeCompare(b.file.name) : b.file.name.localeCompare(a.file.name),
+      ),
+    );
+    resetOutput();
+  }
+
+  async function handleCombine() {
+    if (files.length < 2) return;
     setStatus("working");
     setErrorMessage("");
 
     try {
       const { PDFDocument } = await import("pdf-lib");
-      const docA = await PDFDocument.load(await slotA.file.arrayBuffer());
-      const docB = await PDFDocument.load(await slotB.file.arrayBuffer());
       const outDoc = await PDFDocument.create();
 
-      const indicesA = docA.getPageIndices();
-      // Reversing book 2 before interleaving is the classic fix for scanning
-      // double-sided pages as two separate stacks — the back-side stack
-      // usually comes out of the scanner in reverse page order.
-      const indicesB = reverseB ? [...docB.getPageIndices()].reverse() : docB.getPageIndices();
+      const perFilePages: PDFPage[][] = [];
+      for (const entry of files) {
+        const doc = await PDFDocument.load(await entry.file.arrayBuffer());
+        // Reversing a document before interleaving is the classic fix for
+        // scanning double-sided pages as separate stacks — the back-side
+        // stack usually comes out of the scanner in reverse page order.
+        const indices = entry.order === "reverse" ? [...doc.getPageIndices()].reverse() : doc.getPageIndices();
+        perFilePages.push(await outDoc.copyPages(doc, indices));
+      }
 
-      const copiedA = await outDoc.copyPages(docA, indicesA);
-      const copiedB = await outDoc.copyPages(docB, indicesB);
-
-      const firstArr = order === "a-first" ? copiedA : copiedB;
-      const secondArr = order === "a-first" ? copiedB : copiedA;
-      const maxLen = Math.max(firstArr.length, secondArr.length);
-
-      // Uneven page counts just fall through to only the longer document's
-      // remaining pages once the shorter one runs out, instead of erroring.
-      for (let i = 0; i < maxLen; i++) {
-        if (firstArr[i]) outDoc.addPage(firstArr[i]);
-        if (secondArr[i]) outDoc.addPage(secondArr[i]);
+      // Round-robin through every document, taking a block of `switchAfter`
+      // pages at a time. A document that runs out just drops out of the
+      // rotation instead of erroring, so uneven page counts still work.
+      const chunkSize = Math.max(1, switchAfter);
+      const cursors = new Array(perFilePages.length).fill(0);
+      let anyRemaining = true;
+      while (anyRemaining) {
+        anyRemaining = false;
+        for (let i = 0; i < perFilePages.length; i++) {
+          const pages = perFilePages[i];
+          let taken = 0;
+          while (taken < chunkSize && cursors[i] < pages.length) {
+            outDoc.addPage(pages[cursors[i]]);
+            cursors[i]++;
+            taken++;
+          }
+          if (cursors[i] < pages.length) anyRemaining = true;
+        }
       }
 
       const outBytes = await outDoc.save();
@@ -88,80 +139,24 @@ export function AlternateMixWorkspace() {
       setShowSuccessModal(true);
     } catch (error) {
       setStatus("error");
-      setErrorMessage(describeError(error, error instanceof Error ? `Couldn't combine these files: ${error.message}` : "Couldn't combine these files.",));
-    }
-  }
-
-  function renderSlot(
-    label: string,
-    slot: SlotState,
-    setSlot: (slot: SlotState) => void,
-    inputRef: React.RefObject<HTMLInputElement | null>,
-  ) {
-    if (!slot.file) {
-      return (
-        <div
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            const dropped = event.dataTransfer.files?.[0];
-            if (dropped) loadSlot(setSlot, dropped);
-          }}
-          className="card flex min-h-40 flex-col items-center justify-center gap-2 py-6 text-center"
-        >
-          <span className="text-xs font-medium text-base-content/50">{label}</span>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <ToolIcon name="upload" className="h-5 w-5" />
-          </span>
-          <p className="text-xs text-base-content/70">Drag & drop, or</p>
-          <div className="flex">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="btn btn-primary btn-sm rounded-r-none"
-            >
-              Choose File
-            </button>
-            <UploadSourceMenu onFile={(file) => loadSlot(setSlot, file)} />
-          </div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={(event) => {
-              const selected = event.target.files?.[0];
-              if (selected) loadSlot(setSlot, selected);
-            }}
-          />
-        </div>
+      setErrorMessage(
+        describeError(
+          error,
+          error instanceof Error ? `Couldn't combine these files: ${error.message}` : "Couldn't combine these files.",
+        ),
       );
     }
-
-    return (
-      <div className="card flex min-h-40 flex-col items-center justify-center gap-2 border border-base-300 bg-base-100 p-4 text-center">
-        <span className="text-xs font-medium text-base-content/50">{label}</span>
-        <ToolIcon name="file" className="h-6 w-6 text-primary" />
-        <span className="max-w-full truncate text-sm text-base-content/80">{slot.file.name}</span>
-        {slot.pageCount !== null && (
-          <span className="badge badge-neutral badge-sm">{slot.pageCount} pages</span>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            setSlot(emptySlot);
-            resetOutput();
-          }}
-          className="text-xs text-base-content/50 hover:text-error"
-        >
-          Replace
-        </button>
-      </div>
-    );
   }
 
-  const bothReady = slotA.file && slotB.file;
-  const uneven = slotA.pageCount !== null && slotB.pageCount !== null && slotA.pageCount !== slotB.pageCount;
+  function handleInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files || []);
+    if (selected.length) addFiles(selected);
+    event.target.value = "";
+  }
+
+  const readyToCombine = files.length >= 2 && files.every((f) => f.pageCount !== null);
+  const loadedCounts = files.map((f) => f.pageCount).filter((c): c is number => c !== null);
+  const uneven = loadedCounts.length === files.length && files.length >= 2 && !loadedCounts.every((c) => c === loadedCounts[0]);
 
   return (
     <div className="card border border-base-300 bg-base-100 p-6 shadow-sm">
@@ -173,93 +168,208 @@ export function AlternateMixWorkspace() {
         />
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {renderSlot("Document 1", slotA, setSlotA, inputRefA)}
-        {renderSlot("Document 2", slotB, setSlotB, inputRefB)}
-      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf"
+        multiple
+        className="hidden"
+        onChange={handleInputChange}
+      />
 
-      {bothReady && (
-        <div className="mt-5 space-y-4">
-          <div>
-            <p className="text-sm font-medium text-base-content">Page order</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setOrder("a-first");
-                  resetOutput();
-                }}
-                className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                  order === "a-first"
-                    ? "border-primary bg-primary/5 text-base-content"
-                    : "border-base-300 text-base-content/70 hover:border-primary/40"
-                }`}
-              >
-                <span className="block font-medium">Doc 1, Doc 2, Doc 1, Doc 2...</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setOrder("b-first");
-                  resetOutput();
-                }}
-                className={`flex-1 rounded-lg border px-3 py-2 text-left text-sm transition ${
-                  order === "b-first"
-                    ? "border-primary bg-primary/5 text-base-content"
-                    : "border-base-300 text-base-content/70 hover:border-primary/40"
-                }`}
-              >
-                <span className="block font-medium">Doc 2, Doc 1, Doc 2, Doc 1...</span>
-              </button>
+      {files.length === 0 ? (
+        <div
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const dropped = Array.from(event.dataTransfer.files || []).filter(
+              (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"),
+            );
+            if (dropped.length) addFiles(dropped);
+          }}
+          className="card flex min-h-48 flex-col items-center justify-center gap-3 py-10 text-center"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <ToolIcon name="upload" className="h-6 w-6" />
+          </span>
+          <p className="text-sm text-base-content/70">Drag &amp; drop 2 or more PDFs here, or</p>
+          <div className="flex">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="btn btn-primary btn-sm rounded-r-none"
+            >
+              Choose Files
+            </button>
+            <UploadSourceMenu onFile={(file) => addFiles([file])} />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-medium text-base-content">
+              {files.length} file{files.length !== 1 ? "s" : ""} added
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {files.length >= 2 && (
+                <div className="flex items-center gap-2 text-xs">
+                  <button type="button" onClick={() => sortFiles("asc")} className="text-primary hover:underline">
+                    Sort files A-Z
+                  </button>
+                  <span className="text-base-content/30">|</span>
+                  <button type="button" onClick={() => sortFiles("desc")} className="text-primary hover:underline">
+                    Sort files Z-A
+                  </button>
+                </div>
+              )}
+              <div className="flex">
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="btn btn-primary btn-sm rounded-r-none gap-1.5"
+                >
+                  <ToolIcon name="upload" className="h-4 w-4" />
+                  Add more files
+                </button>
+                <UploadSourceMenu onFile={(file) => addFiles([file])} />
+              </div>
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-base-content/80">
-            <input
-              type="checkbox"
-              checked={reverseB}
-              onChange={(event) => {
-                setReverseB(event.target.checked);
-                resetOutput();
-              }}
-              className="checkbox checkbox-sm"
-            />
-            Reverse Document 2's page order first
-            <span className="text-xs text-base-content/50">
-              (use this if Document 2 is a back-side scan that came out in reverse)
-            </span>
-          </label>
+          <div className="mt-4 space-y-2">
+            {files.map((entry, index) => (
+              <div
+                key={entry.id}
+                className="flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-3 sm:flex-row sm:items-center"
+              >
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                    {index + 1}
+                  </span>
+                  <ToolIcon name="file" className="h-5 w-5 shrink-0 text-base-content/40" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-base-content">{entry.file.name}</p>
+                    <p className="text-xs text-base-content/50">
+                      {entry.pageCount !== null ? `${entry.pageCount} pages` : "Reading…"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <div className="join">
+                    <button
+                      type="button"
+                      onClick={() => setOrderFor(entry.id, "regular")}
+                      className={`btn btn-xs join-item ${
+                        entry.order === "regular" ? "btn-primary" : "btn-ghost border border-base-300"
+                      }`}
+                    >
+                      Regular Order
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOrderFor(entry.id, "reverse")}
+                      title="Use this if this document is a back-side scan that came out in reverse order"
+                      className={`btn btn-xs join-item ${
+                        entry.order === "reverse" ? "btn-primary" : "btn-ghost border border-base-300"
+                      }`}
+                    >
+                      Reverse Order
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveFile(entry.id, -1)}
+                      disabled={index === 0}
+                      aria-label="Move up"
+                      title="Move up"
+                      className="btn btn-ghost btn-xs btn-square disabled:opacity-30"
+                    >
+                      <ToolIcon name="chevron-down" className="h-4 w-4 rotate-180" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveFile(entry.id, 1)}
+                      disabled={index === files.length - 1}
+                      aria-label="Move down"
+                      title="Move down"
+                      className="btn btn-ghost btn-xs btn-square disabled:opacity-30"
+                    >
+                      <ToolIcon name="chevron-down" className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(entry.id)}
+                      aria-label="Remove file"
+                      title="Remove file"
+                      className="btn btn-ghost btn-xs btn-square text-error"
+                    >
+                      <ToolIcon name="trash" className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {files.length === 1 && (
+            <p className="mt-3 text-xs text-base-content/50">Add at least one more PDF to alternate &amp; mix pages.</p>
+          )}
+
+          {files.length >= 2 && (
+            <div className="mt-5 flex flex-wrap items-center gap-3 rounded-lg bg-base-200/50 p-3">
+              <label htmlFor="switchAfter" className="text-sm text-base-content/80">
+                Switch document after reading
+              </label>
+              <input
+                id="switchAfter"
+                type="number"
+                min={1}
+                value={switchAfter}
+                onChange={(event) => {
+                  setSwitchAfter(Math.max(1, Number(event.target.value) || 1));
+                  resetOutput();
+                }}
+                className="input input-bordered input-sm w-20"
+              />
+              <span className="text-sm text-base-content/80">page{switchAfter !== 1 ? "s" : ""}</span>
+            </div>
+          )}
 
           {uneven && (
-            <p className="text-xs text-base-content/50">
-              Document 1 has {slotA.pageCount} pages and Document 2 has {slotB.pageCount} — once the shorter
-              one runs out, the rest of the longer document is added at the end.
+            <p className="mt-3 text-xs text-base-content/50">
+              These documents have different page counts — once a shorter one runs out, the rest continue cycling
+              through the remaining documents.
             </p>
           )}
-        </div>
+        </>
       )}
 
       {errorMessage && (
         <p className="mt-4 rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>
       )}
 
-      <div className="mt-5">
-        {status === "done" && downloadUrl ? (
-          <a href={downloadUrl} download="alternated.pdf" className="btn btn-primary w-full">
-            <ToolIcon name="download" className="h-4 w-4" />
-            Download Combined PDF
-          </a>
-        ) : (
-          <button
-            type="button"
-            onClick={handleMerge}
-            disabled={!bothReady || status === "working"}
-            className="btn btn-primary w-full"
-          >
-            {status === "working" ? "Combining..." : "Alternate & Mix"}
-          </button>
-        )}
-      </div>
+      {files.length > 0 && (
+        <div className="mt-5">
+          {status === "done" && downloadUrl ? (
+            <a href={downloadUrl} download="alternated.pdf" className="btn btn-primary w-full">
+              <ToolIcon name="download" className="h-4 w-4" />
+              Download Combined PDF
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={handleCombine}
+              disabled={!readyToCombine || status === "working"}
+              className="btn btn-primary w-full"
+            >
+              {status === "working" ? "Combining..." : "Alternate & Mix"}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

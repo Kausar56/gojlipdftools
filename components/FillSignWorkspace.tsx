@@ -5,18 +5,23 @@ import { ToolIcon } from "./icons";
 import { UploadSourceMenu } from "./UploadSourceMenu";
 import { SignaturePad } from "./SignaturePad";
 import { SaveSuccessModal } from "./SaveSuccessModal";
+import { ColorSwatchPicker } from "./ColorSwatchPicker";
 import { loadPdfjs } from "@/lib/pdfjs";
+import { hexToRgbFloat } from "@/lib/colorSwatches";
 import { describeError } from "@/lib/errorHelpers";
 
 type Status = "idle" | "working" | "done" | "error";
 
 type BaseElement = { id: string; pageIndex: number; xPct: number; yPct: number };
-type TextElement = BaseElement & { type: "text"; text: string; fontSizePt: number };
-type CheckmarkElement = BaseElement & { type: "checkmark"; sizePt: number };
+type TextElement = BaseElement & { type: "text"; text: string; fontSizePt: number; colorHex: string };
+type CheckmarkElement = BaseElement & { type: "checkmark"; sizePt: number; colorHex: string };
 type SignatureElement = BaseElement & { type: "signature"; dataUrl: string; widthPt: number; aspectRatio: number };
 type FillElement = TextElement | CheckmarkElement | SignatureElement;
 
-const PREVIEW_WIDTH_PX = 480;
+const CONTAINER_PADDING_PX = 32;
+const MIN_ZOOM = 50;
+const MAX_ZOOM = 200;
+const ZOOM_STEP = 10;
 // Staggers where a newly added element lands so repeatedly clicking "Add
 // Text" doesn't pile every one exactly on top of the last.
 const STAGGER_STEPS = [
@@ -35,12 +40,19 @@ export function FillSignWorkspace() {
   const inputRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const previewBoxRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState<number | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [pageSizePt, setPageSizePt] = useState<{ width: number; height: number } | null>(null);
+  const [containerWidth, setContainerWidth] = useState(700);
+  const [zoomPercent, setZoomPercent] = useState(100);
   const [elements, setElements] = useState<FillElement[]>([]);
   const [addCount, setAddCount] = useState(0);
+  // Set right after a text/date field is added so its input can grab focus
+  // and select its placeholder text once — the user can start typing
+  // immediately instead of clicking in and clearing "Click to edit" first.
+  const [focusElementId, setFocusElementId] = useState<string | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   // Drawing a signature is the slow part — cache it so "Add Signature" after
   // the first time just stamps another copy instead of reopening the pad.
@@ -65,6 +77,7 @@ export function FillSignWorkspace() {
     setCurrentPageIndex(0);
     setElements([]);
     setAddCount(0);
+    setZoomPercent(100);
     try {
       const pdfjs = await loadPdfjs();
       const doc = await pdfjs.getDocument({ data: await selected.arrayBuffer() }).promise;
@@ -74,6 +87,20 @@ export function FillSignWorkspace() {
       setErrorMessage(describeError(error, "Couldn't read this file — make sure it's a valid PDF."));
     }
   }
+
+  // Tracks the scroll container's own width so the page can be fit to it
+  // (like PdfEditorWorkspace) instead of rendering at a small fixed size.
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setContainerWidth(Math.round(entry.contentRect.width / 8) * 8);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [file]);
 
   // Renders whichever page is currently selected for filling.
   useEffect(() => {
@@ -87,8 +114,10 @@ export function FillSignWorkspace() {
         const pageNumber = Math.min(Math.max(currentPageIndex + 1, 1), doc.numPages);
         const page = await doc.getPage(pageNumber);
         const baseViewport = page.getViewport({ scale: 1 });
-        const scale = PREVIEW_WIDTH_PX / baseViewport.width;
-        const viewport = page.getViewport({ scale });
+        const availableWidth = Math.max(240, containerWidth - CONTAINER_PADDING_PX);
+        const fitScale = availableWidth / baseViewport.width;
+        const renderScale = fitScale * (zoomPercent / 100);
+        const viewport = page.getViewport({ scale: renderScale });
         const canvas = previewCanvasRef.current;
         if (!canvas || cancelled) return;
         canvas.width = viewport.width;
@@ -105,9 +134,13 @@ export function FillSignWorkspace() {
     return () => {
       cancelled = true;
     };
-  }, [file, pageCount, currentPageIndex]);
+  }, [file, pageCount, currentPageIndex, containerWidth, zoomPercent]);
 
-  const previewScale = pageSizePt ? PREVIEW_WIDTH_PX / pageSizePt.width : 1;
+  const previewScale = (() => {
+    if (!pageSizePt) return 1;
+    const availableWidth = Math.max(240, containerWidth - CONTAINER_PADDING_PX);
+    return (availableWidth / pageSizePt.width) * (zoomPercent / 100);
+  })();
   const currentPageElements = elements.filter((el) => el.pageIndex === currentPageIndex);
 
   function nextStagger() {
@@ -121,8 +154,18 @@ export function FillSignWorkspace() {
     const id = createElementId();
     setElements((prev) => [
       ...prev,
-      { id, pageIndex: currentPageIndex, xPct: spot.x, yPct: spot.y, type: "text", text: prefill, fontSizePt: 14 },
+      {
+        id,
+        pageIndex: currentPageIndex,
+        xPct: spot.x,
+        yPct: spot.y,
+        type: "text",
+        text: prefill,
+        fontSizePt: 14,
+        colorHex: "#000000",
+      },
     ]);
+    setFocusElementId(id);
     resetOutput();
   }
 
@@ -135,7 +178,7 @@ export function FillSignWorkspace() {
     const id = createElementId();
     setElements((prev) => [
       ...prev,
-      { id, pageIndex: currentPageIndex, xPct: spot.x, yPct: spot.y, type: "checkmark", sizePt: 24 },
+      { id, pageIndex: currentPageIndex, xPct: spot.x, yPct: spot.y, type: "checkmark", sizePt: 24, colorHex: "#000000" },
     ]);
     resetOutput();
   }
@@ -234,22 +277,23 @@ export function FillSignWorkspace() {
             y: cy - el.fontSizePt / 2,
             size: el.fontSizePt,
             font,
-            color: rgb(0, 0, 0),
+            color: rgb(...hexToRgbFloat(el.colorHex)),
           });
         } else if (el.type === "checkmark") {
           const s = el.sizePt;
           const thickness = Math.max(1.5, s * 0.12);
+          const color = rgb(...hexToRgbFloat(el.colorHex));
           page.drawLine({
             start: { x: cx - s * 0.35, y: cy },
             end: { x: cx - s * 0.05, y: cy - s * 0.35 },
             thickness,
-            color: rgb(0, 0, 0),
+            color,
           });
           page.drawLine({
             start: { x: cx - s * 0.05, y: cy - s * 0.35 },
             end: { x: cx + s * 0.35, y: cy + s * 0.25 },
             thickness,
-            color: rgb(0, 0, 0),
+            color,
           });
         } else if (el.type === "signature") {
           let image = imageCache.get(el.dataUrl);
@@ -379,150 +423,196 @@ export function FillSignWorkspace() {
 
       <div className="mt-5 flex flex-col items-center gap-2">
         <div
-          ref={previewBoxRef}
-          className="relative select-none overflow-hidden rounded-sm border border-base-300 bg-base-200 shadow-sm"
+          ref={scrollContainerRef}
+          className="max-h-[75vh] w-full overflow-auto rounded-sm border border-base-300 bg-base-200 p-4 shadow-sm"
         >
-          <canvas ref={previewCanvasRef} className="block max-w-full" />
+          <div ref={previewBoxRef} className="relative mx-auto w-fit select-none">
+            <canvas ref={previewCanvasRef} className="block" />
 
-          {currentPageElements.map((el) => (
-            <div
-              key={el.id}
-              className="absolute flex items-center gap-1 rounded border border-primary/40 bg-base-100/95 px-1 py-0.5 shadow-sm"
-              style={{ left: `${el.xPct * 100}%`, top: `${el.yPct * 100}%`, transform: "translate(-50%, -50%)" }}
-            >
-              <span
-                onPointerDown={(event) => startDrag(el.id, event)}
-                style={{ touchAction: "none" }}
-                className="cursor-grab text-base-content/40 hover:text-base-content/70 active:cursor-grabbing"
-                aria-label="Drag to move"
-                title="Drag to move"
+            {currentPageElements.map((el) => (
+              <div
+                key={el.id}
+                className="absolute flex items-center gap-1 rounded border border-primary/40 bg-base-100/95 px-1 py-0.5 shadow-sm"
+                style={{ left: `${el.xPct * 100}%`, top: `${el.yPct * 100}%`, transform: "translate(-50%, -50%)" }}
               >
-                <ToolIcon name="grip" className="h-3.5 w-3.5" />
-              </span>
+                <span
+                  onPointerDown={(event) => startDrag(el.id, event)}
+                  style={{ touchAction: "none" }}
+                  className="cursor-grab text-base-content/40 hover:text-base-content/70 active:cursor-grabbing"
+                  aria-label="Drag to move"
+                  title="Drag to move"
+                >
+                  <ToolIcon name="grip" className="h-3.5 w-3.5" />
+                </span>
 
-              {el.type === "text" && (
-                <>
-                  <input
-                    type="text"
-                    value={el.text}
-                    onChange={(event) => updateElement(el.id, { text: event.target.value })}
-                    style={{ fontSize: Math.max(8, el.fontSizePt * previewScale) }}
-                    className="min-w-0 border-none bg-transparent p-0 outline-none"
-                    size={Math.max(4, el.text.length)}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => updateElement(el.id, { fontSizePt: Math.max(6, el.fontSizePt - 2) })}
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label="Smaller text"
-                  >
-                    <ToolIcon name="minus" className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateElement(el.id, { fontSizePt: Math.min(72, el.fontSizePt + 2) })}
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label="Bigger text"
-                  >
-                    <ToolIcon name="plus" className="h-3 w-3" />
-                  </button>
-                </>
-              )}
+                {el.type === "text" && (
+                  <>
+                    <input
+                      type="text"
+                      value={el.text}
+                      onChange={(event) => updateElement(el.id, { text: event.target.value })}
+                      style={{ fontSize: Math.max(8, el.fontSizePt * previewScale), color: el.colorHex }}
+                      className="min-w-0 border-none bg-transparent p-0 outline-none"
+                      size={Math.max(4, el.text.length)}
+                      ref={(node) => {
+                        if (node && el.id === focusElementId) {
+                          node.focus();
+                          node.select();
+                          setFocusElementId(null);
+                        }
+                      }}
+                    />
+                    <ColorSwatchPicker
+                      value={el.colorHex}
+                      onChange={(colorHex) => updateElement(el.id, { colorHex })}
+                      title="Text color"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateElement(el.id, { fontSizePt: Math.max(6, el.fontSizePt - 2) })}
+                      className="btn btn-ghost btn-xs btn-square"
+                      aria-label="Smaller text"
+                    >
+                      <ToolIcon name="minus" className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateElement(el.id, { fontSizePt: Math.min(72, el.fontSizePt + 2) })}
+                      className="btn btn-ghost btn-xs btn-square"
+                      aria-label="Bigger text"
+                    >
+                      <ToolIcon name="plus" className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
 
-              {el.type === "checkmark" && (
-                <>
-                  <span
-                    className="inline-block text-primary"
-                    style={{ width: el.sizePt * previewScale, height: el.sizePt * previewScale }}
-                  >
-                    <ToolIcon name="check" className="h-full w-full" />
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => updateElement(el.id, { sizePt: Math.max(10, el.sizePt - 4) })}
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label="Smaller checkmark"
-                  >
-                    <ToolIcon name="minus" className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateElement(el.id, { sizePt: Math.min(72, el.sizePt + 4) })}
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label="Bigger checkmark"
-                  >
-                    <ToolIcon name="plus" className="h-3 w-3" />
-                  </button>
-                </>
-              )}
+                {el.type === "checkmark" && (
+                  <>
+                    <span
+                      className="inline-block"
+                      style={{ width: el.sizePt * previewScale, height: el.sizePt * previewScale, color: el.colorHex }}
+                    >
+                      <ToolIcon name="check" className="h-full w-full" />
+                    </span>
+                    <ColorSwatchPicker
+                      value={el.colorHex}
+                      onChange={(colorHex) => updateElement(el.id, { colorHex })}
+                      title="Checkmark color"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateElement(el.id, { sizePt: Math.max(10, el.sizePt - 4) })}
+                      className="btn btn-ghost btn-xs btn-square"
+                      aria-label="Smaller checkmark"
+                    >
+                      <ToolIcon name="minus" className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateElement(el.id, { sizePt: Math.min(72, el.sizePt + 4) })}
+                      className="btn btn-ghost btn-xs btn-square"
+                      aria-label="Bigger checkmark"
+                    >
+                      <ToolIcon name="plus" className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
 
-              {el.type === "signature" && (
-                <>
-                  <img
-                    src={el.dataUrl}
-                    alt="Signature"
-                    draggable={false}
-                    style={{ width: el.widthPt * previewScale, height: el.widthPt * el.aspectRatio * previewScale }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => updateElement(el.id, { widthPt: Math.max(40, el.widthPt - 20) })}
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label="Smaller signature"
-                  >
-                    <ToolIcon name="minus" className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateElement(el.id, { widthPt: Math.min(320, el.widthPt + 20) })}
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label="Bigger signature"
-                  >
-                    <ToolIcon name="plus" className="h-3 w-3" />
-                  </button>
-                </>
-              )}
+                {el.type === "signature" && (
+                  <>
+                    <img
+                      src={el.dataUrl}
+                      alt="Signature"
+                      draggable={false}
+                      style={{ width: el.widthPt * previewScale, height: el.widthPt * el.aspectRatio * previewScale }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateElement(el.id, { widthPt: Math.max(40, el.widthPt - 20) })}
+                      className="btn btn-ghost btn-xs btn-square"
+                      aria-label="Smaller signature"
+                    >
+                      <ToolIcon name="minus" className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateElement(el.id, { widthPt: Math.min(320, el.widthPt + 20) })}
+                      className="btn btn-ghost btn-xs btn-square"
+                      aria-label="Bigger signature"
+                    >
+                      <ToolIcon name="plus" className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
 
-              <button
-                type="button"
-                onClick={() => deleteElement(el.id)}
-                className="btn btn-ghost btn-xs btn-square text-error"
-                aria-label="Delete"
-              >
-                <ToolIcon name="close" className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => deleteElement(el.id)}
+                  className="btn btn-ghost btn-xs btn-square text-error"
+                  aria-label="Delete"
+                >
+                  <ToolIcon name="close" className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {pageCount && pageCount > 1 && (
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setCurrentPageIndex((index) => Math.max(0, index - 1))}
-              disabled={currentPageIndex === 0}
-              className="btn btn-ghost btn-xs btn-square"
-              aria-label="Previous page"
-            >
-              <ToolIcon name="chevron-down" className="h-3.5 w-3.5 rotate-90" />
+        <div className="flex flex-wrap items-center justify-center gap-3 text-xs text-base-content/60">
+          {pageCount && pageCount > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setCurrentPageIndex((index) => Math.max(0, index - 1))}
+                disabled={currentPageIndex === 0}
+                className="btn btn-ghost btn-xs btn-square"
+                aria-label="Previous page"
+              >
+                <ToolIcon name="chevron-down" className="h-3.5 w-3.5 rotate-90" />
+              </button>
+              <span>
+                Page {currentPageIndex + 1} of {pageCount}
+                {elements.some((el) => el.pageIndex === currentPageIndex) && (
+                  <span className="ml-1 text-primary">(has fields)</span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPageIndex((index) => Math.min((pageCount ?? 1) - 1, index + 1))}
+                disabled={currentPageIndex === pageCount - 1}
+                className="btn btn-ghost btn-xs btn-square"
+                aria-label="Next page"
+              >
+                <ToolIcon name="chevron-down" className="h-3.5 w-3.5 -rotate-90" />
+              </button>
+
+              <span className="mx-1 h-4 w-px bg-base-300" />
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setZoomPercent((z) => Math.max(MIN_ZOOM, z - ZOOM_STEP))}
+            className="btn btn-ghost btn-xs btn-square"
+            aria-label="Zoom out"
+          >
+            <ToolIcon name="zoom-out" className="h-3.5 w-3.5" />
+          </button>
+          <span className="w-10 text-center">{zoomPercent}%</span>
+          <button
+            type="button"
+            onClick={() => setZoomPercent((z) => Math.min(MAX_ZOOM, z + ZOOM_STEP))}
+            className="btn btn-ghost btn-xs btn-square"
+            aria-label="Zoom in"
+          >
+            <ToolIcon name="zoom-in" className="h-3.5 w-3.5" />
+          </button>
+          {zoomPercent !== 100 && (
+            <button type="button" onClick={() => setZoomPercent(100)} className="text-primary hover:underline">
+              Reset
             </button>
-            <span className="text-xs text-base-content/60">
-              Page {currentPageIndex + 1} of {pageCount}
-              {elements.some((el) => el.pageIndex === currentPageIndex) && (
-                <span className="ml-1 text-primary">(has fields)</span>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentPageIndex((index) => Math.min((pageCount ?? 1) - 1, index + 1))}
-              disabled={currentPageIndex === pageCount - 1}
-              className="btn btn-ghost btn-xs btn-square"
-              aria-label="Next page"
-            >
-              <ToolIcon name="chevron-down" className="h-3.5 w-3.5 -rotate-90" />
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {errorMessage && (
