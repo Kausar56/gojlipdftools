@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { UploadDropzone } from "./UploadDropzone";
-import { ToolSteps } from "./ToolSteps";
+import { ToolGuide } from "./ToolGuide";
 import { ToolFaq } from "./ToolFaq";
 import { RecentToolTracker } from "./RecentToolTracker";
 import { ToolIcon } from "./icons";
 import { getToolStatusMap } from "@/lib/appSettings";
+import { getEffectiveToolContent } from "@/lib/toolContent";
 import type { Tool } from "@/lib/tools";
 
 // The one place all ~44 tool pages route through (every app/<slug>/page.tsx
@@ -20,7 +21,8 @@ export async function ToolPageLayout({
   workspace?: React.ReactNode;
   maxWidthClassName?: string;
 }) {
-  const toolStatus = (await getToolStatusMap())[tool.slug];
+  const [toolStatusMap, content] = await Promise.all([getToolStatusMap(), getEffectiveToolContent(tool)]);
+  const toolStatus = toolStatusMap[tool.slug];
 
   return (
     <div>
@@ -94,10 +96,10 @@ export async function ToolPageLayout({
 
       <div className="bg-base-100 py-14">
         <div className={`relative mx-auto px-4 sm:px-8 ${maxWidthClassName}`}>
-          <ToolSteps tool={tool} />
+          <ToolGuide title={content.guideTitle} guideHtml={content.guideHtml} />
 
           <div className="mt-14">
-            <ToolFaq faqs={tool.faqs} />
+            <ToolFaq faqs={content.faqs} />
           </div>
 
           <div className="mt-14 text-center">

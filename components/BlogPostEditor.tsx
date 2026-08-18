@@ -1,68 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActionState } from "react";
-import dynamic from "next/dynamic";
-import "react-quill-new/dist/quill.snow.css";
-import type { Quill } from "react-quill-new";
+import { RichTextEditor } from "./RichTextEditor";
 import { slugify } from "@/lib/blogSlug";
+import { uploadImageViaSignedEndpoint } from "@/lib/uploadImageClient";
 import type { BlogPost } from "@/lib/blog";
 import type { ActionState } from "@/app/admin/blog/actions";
 
-// Quill reads from `document` as soon as it's constructed, so it can't run
-// during SSR — Next still does a first server-side pass even for a "use
-// client" component, so this still needs the dynamic()+ssr:false wrapper.
-const QuillEditor = dynamic(() => import("react-quill-new"), {
-  ssr: false,
-  loading: () => <div className="min-h-85 animate-pulse rounded-lg border border-base-300 bg-base-200" />,
-});
-
-// Capped to h1-h3 (rather than Quill's default up to h6) to match what
-// sanitizeHtml's allowlist keeps in app/admin/blog/actions.ts — picking h4-h6
-// here would silently get stripped down to a plain paragraph on save.
-const QUILL_TOOLBAR = [
-  [{ header: [1, 2, 3, false] }],
-  ["bold", "italic", "underline", "strike"],
-  ["blockquote", "code-block"],
-  [{ list: "ordered" }, { list: "bullet" }],
-  ["link", "image"],
-  ["clean"],
-];
-const QUILL_FORMATS = [
-  "header",
-  "bold",
-  "italic",
-  "underline",
-  "strike",
-  "blockquote",
-  "code-block",
-  "list",
-  "link",
-  "image",
-];
-
-async function uploadImage(file: File): Promise<{ url: string; publicId: string }> {
-  const sigRes = await fetch("/api/admin/blog/upload-signature", { method: "POST" });
-  if (!sigRes.ok) {
-    const body = await sigRes.json().catch(() => ({}));
-    throw new Error(body.error ?? "Couldn't get an upload signature.");
-  }
-  const { signature, timestamp, apiKey, cloudName, folder } = await sigRes.json();
-
-  const form = new FormData();
-  form.append("file", file);
-  form.append("api_key", apiKey);
-  form.append("timestamp", String(timestamp));
-  form.append("signature", signature);
-  form.append("folder", folder);
-
-  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-    method: "POST",
-    body: form,
-  });
-  if (!uploadRes.ok) throw new Error("Uploading to Cloudinary failed.");
-  const data = await uploadRes.json();
-  return { url: data.secure_url as string, publicId: data.public_id as string };
+function uploadImage(file: File): Promise<{ url: string; publicId: string }> {
+  return uploadImageViaSignedEndpoint(file, "/api/admin/blog/upload-signature");
 }
 
 export function BlogPostEditor({
@@ -115,43 +62,19 @@ export function BlogPostEditor({
     }
   }
 
-  // Stable across renders (empty deps) — react-quill-new tears down and
-  // recreates the whole Quill instance whenever this object's identity
-  // changes, which would reset the cursor/undo history on every keystroke
-  // if it were rebuilt on each render instead.
-  const modules = useMemo(
-    () => ({
-      toolbar: {
-        container: QUILL_TOOLBAR,
-        handlers: {
-          // A regular function (not an arrow function) — Quill calls this
-          // with `this` bound to the toolbar module, which is how `this.quill`
-          // below gets the actual editor instance without needing a ref.
-          image(this: { quill: Quill }) {
-            const quill = this.quill;
-            const range = quill.getSelection(true);
-            const input = document.createElement("input");
-            input.type = "file";
-            input.accept = "image/*";
-            input.onchange = async () => {
-              const file = input.files?.[0];
-              if (!file) return;
-              setUploadError("");
-              try {
-                const { url } = await uploadImage(file);
-                quill.insertEmbed(range.index, "image", url, "user");
-                quill.setSelection(range.index + 1, 0, "user");
-              } catch (error) {
-                setUploadError(error instanceof Error ? error.message : "Couldn't upload the image.");
-              }
-            };
-            input.click();
-          },
-        },
-      },
-    }),
-    [],
-  );
+  // useCallback (not a fresh closure per render) — RichTextEditor tears down
+  // and recreates the whole Quill instance whenever this reference changes,
+  // which would reset the cursor/undo history on every keystroke otherwise.
+  const handleContentImageUpload = useCallback(async (file: File) => {
+    setUploadError("");
+    try {
+      const { url } = await uploadImage(file);
+      return url;
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : "Couldn't upload the image.");
+      throw error;
+    }
+  }, []);
 
   return (
     <form action={formAction} className="space-y-5">
@@ -285,13 +208,12 @@ export function BlogPostEditor({
 
       <div>
         <p className="text-sm font-medium text-base-content">Content</p>
-        <div className="mt-1.5 [&_.ql-editor]:min-h-70 [&_.ql-editor]:text-sm [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg">
-          <QuillEditor
-            theme="snow"
+        <div className="mt-1.5">
+          <RichTextEditor
             defaultValue={post?.contentHtml ?? ""}
             onChange={setContentHtml}
-            modules={modules}
-            formats={QUILL_FORMATS}
+            onImageUpload={handleContentImageUpload}
+            size="lg"
             placeholder="Write your post..."
           />
         </div>

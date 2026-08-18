@@ -17,7 +17,10 @@ const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2.5;
 const ZOOM_STEP = 0.25;
 
-type PreviewState = { status: "loading" } | { status: "ready"; src: string; pageCount: number } | { status: "unavailable" };
+type PdfjsModule = Awaited<ReturnType<typeof loadPdfjs>>;
+type PdfDocumentProxy = Awaited<ReturnType<PdfjsModule["getDocument"]>["promise"]>;
+
+type PreviewState = { status: "loading" } | { status: "ready"; src: string } | { status: "unavailable" };
 
 export function SaveSuccessModal({
   downloadUrl,
@@ -32,40 +35,34 @@ export function SaveSuccessModal({
 }) {
   const [preview, setPreview] = useState<PreviewState>({ status: "loading" });
   const [zoom, setZoom] = useState(1);
+  const [pdfDoc, setPdfDoc] = useState<PdfDocumentProxy | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Renders the first page of the actual saved file so the user can confirm
-  // it looks right before downloading — fetch() works the same for a local
-  // blob: URL (the common case) and a remote server-generated URL alike, so
-  // every caller just passes whatever downloadUrl it already has. Falls back
-  // to no preview (rather than breaking the modal) for non-PDF output or if
-  // the fetch/render fails for any reason — a corrupt render here shouldn't
-  // block the user from downloading a file that saved just fine.
+  // Loads the actual saved file once per downloadUrl — fetch() works the
+  // same for a local blob: URL (the common case) and a remote server-
+  // generated URL alike, so every caller just passes whatever downloadUrl it
+  // already has. Falls back to no preview (rather than breaking the modal)
+  // for non-PDF output or if the fetch/parse fails for any reason — a
+  // corrupt render here shouldn't block downloading a file that saved fine.
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      setPreview({ status: "loading" });
       setZoom(1);
+      setCurrentPage(1);
+      setPdfDoc(null);
       if (!downloadFileName.toLowerCase().endsWith(".pdf")) {
         setPreview({ status: "unavailable" });
         return;
       }
+      setPreview({ status: "loading" });
       try {
         const [pdfjs, res] = await Promise.all([loadPdfjs(), fetch(downloadUrl)]);
         if (!res.ok) throw new Error("Couldn't read the saved file.");
         const bytes = await res.arrayBuffer();
         const doc = await pdfjs.getDocument({ data: bytes }).promise;
-        const page = await doc.getPage(1);
-        const baseViewport = page.getViewport({ scale: 1 });
-        const viewport = page.getViewport({ scale: PREVIEW_RENDER_WIDTH_PX / baseViewport.width });
-        const canvas = document.createElement("canvas");
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Canvas rendering isn't supported here.");
-        await page.render({ canvas, canvasContext: ctx, viewport }).promise;
         if (cancelled) return;
-        setPreview({ status: "ready", src: canvas.toDataURL("image/png"), pageCount: doc.numPages });
+        setPdfDoc(doc);
       } catch {
         if (!cancelled) setPreview({ status: "unavailable" });
       }
@@ -75,6 +72,38 @@ export function SaveSuccessModal({
       cancelled = true;
     };
   }, [downloadUrl, downloadFileName]);
+
+  // Renders whichever page is currently selected — split out from the load
+  // effect above so stepping through pages re-renders from the
+  // already-parsed document instead of re-fetching and re-parsing the whole
+  // file on every click.
+  useEffect(() => {
+    if (!pdfDoc) return;
+    let cancelled = false;
+
+    (async () => {
+      setPreview({ status: "loading" });
+      try {
+        const page = await pdfDoc.getPage(currentPage);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const viewport = page.getViewport({ scale: PREVIEW_RENDER_WIDTH_PX / baseViewport.width });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas rendering isn't supported here.");
+        await page.render({ canvas, canvasContext: ctx, viewport }).promise;
+        if (cancelled) return;
+        setPreview({ status: "ready", src: canvas.toDataURL("image/png") });
+      } catch {
+        if (!cancelled) setPreview({ status: "unavailable" });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pdfDoc, currentPage]);
 
   const recommended = recommendedSlugs
     .map((slug) => getToolBySlug(slug))
@@ -129,7 +158,35 @@ export function SaveSuccessModal({
               )}
             </div>
 
-            {preview.status === "ready" && (
+            {pdfDoc && pdfDoc.numPages > 1 && (
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1 || preview.status === "loading"}
+                  aria-label="Previous page"
+                  title="Previous page"
+                  className="btn btn-ghost btn-xs btn-square"
+                >
+                  <ToolIcon name="chevron-down" className="h-3.5 w-3.5 rotate-90" />
+                </button>
+                <span className="text-xs text-base-content/60">
+                  Page {currentPage} of {pdfDoc.numPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(pdfDoc.numPages, p + 1))}
+                  disabled={currentPage >= pdfDoc.numPages || preview.status === "loading"}
+                  aria-label="Next page"
+                  title="Next page"
+                  className="btn btn-ghost btn-xs btn-square"
+                >
+                  <ToolIcon name="chevron-down" className="h-3.5 w-3.5 -rotate-90" />
+                </button>
+              </div>
+            )}
+
+            {pdfDoc && (
               <div className="mt-2 flex items-center gap-2">
                 <button
                   type="button"
@@ -159,9 +216,6 @@ export function SaveSuccessModal({
                 >
                   <ToolIcon name="plus" className="h-3.5 w-3.5" />
                 </button>
-                {preview.pageCount > 1 && (
-                  <span className="ml-1 text-xs text-base-content/50">Page 1 of {preview.pageCount}</span>
-                )}
               </div>
             )}
           </div>

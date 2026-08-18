@@ -2,31 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import sanitizeHtml from "sanitize-html";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
 import { logAdminAction } from "@/lib/auditLog";
 import { slugify } from "@/lib/blog";
 import { deleteUploadedImage } from "@/lib/cloudinary";
+import { sanitizeRichTextHtml } from "@/lib/sanitizeRichText";
 
 export type ActionState = { error?: string };
-
-// Only admins ever author posts, but this still sanitizes before storage —
-// the trust boundary is "whatever the rich text editor's HTML happens to
-// contain", not the admin themselves, and this is the one place raw HTML
-// from that editor ever gets written to the database.
-const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
-  allowedTags: [
-    "h1", "h2", "h3", "h4", "p", "br", "hr",
-    "b", "strong", "i", "em", "s", "strike", "u", "code", "pre",
-    "blockquote", "ul", "ol", "li", "a", "img",
-  ],
-  allowedAttributes: {
-    a: ["href", "target", "rel"],
-    img: ["src", "alt", "title"],
-  },
-  allowedSchemes: ["http", "https", "data"],
-};
 
 // Any real admin can do anything below; a moderator needs both the specific
 // permission and (for edit/delete) to be the post's own author — see
@@ -72,7 +55,7 @@ function readFields(formData: FormData) {
     title,
     slug,
     excerpt: excerpt || null,
-    contentHtml: sanitizeHtml(contentHtmlRaw, SANITIZE_OPTIONS),
+    contentHtml: sanitizeRichTextHtml(contentHtmlRaw),
     thumbnailUrl: thumbnailUrl || null,
     thumbnailPublicId: thumbnailPublicId || null,
     status,

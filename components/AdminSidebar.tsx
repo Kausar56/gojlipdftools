@@ -16,6 +16,12 @@ const NAV_ITEMS: { href: string; label: string; icon: string; check: (access: Vi
   { href: "/admin/users", label: "Users", icon: "users", check: (access) => access.kind === "admin" },
   { href: "/admin/stats", label: "Statistics", icon: "chart", check: (access) => hasPermission(access, "stats:view") },
   { href: "/admin/blog", label: "Blog", icon: "file", check: (access) => access.kind !== "none" },
+  {
+    href: "/admin/tool-content",
+    label: "Tool Content",
+    icon: "text-multiline",
+    check: (access) => access.kind === "admin",
+  },
   { href: "/admin/moderators", label: "Moderators", icon: "shield", check: (access) => access.kind === "admin" },
   { href: "/admin/settings", label: "Settings", icon: "settings", check: (access) => access.kind === "admin" },
   { href: "/admin/audit-log", label: "Audit Log", icon: "history", check: (access) => access.kind === "admin" },
