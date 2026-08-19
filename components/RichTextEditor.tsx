@@ -28,9 +28,14 @@ const FORMATS = ["header", "bold", "italic", "underline", "strike", "blockquote"
 // from a template literal) so Tailwind's static scanner — which only
 // recognizes complete literal class names appearing in the source, never
 // runtime-interpolated ones — actually generates the CSS for both.
+// Capped with [&_.ql-editor]:max-h-* + overflow-y-auto so a long post scrolls
+// inside the editing area instead of growing the box taller — without a cap,
+// the toolbar (a sibling above .ql-editor, not sticky) ends up pages above
+// wherever you're currently typing, forcing a scroll to the top of the page
+// just to reach a formatting button.
 const WRAPPER_CLASSES = {
-  sm: "[&_.ql-editor]:min-h-32 [&_.ql-editor]:text-sm [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg",
-  lg: "[&_.ql-editor]:min-h-70 [&_.ql-editor]:text-sm [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg",
+  sm: "[&_.ql-editor]:min-h-32 [&_.ql-editor]:max-h-64 [&_.ql-editor]:overflow-y-auto [&_.ql-editor]:text-sm [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg",
+  lg: "[&_.ql-editor]:min-h-70 [&_.ql-editor]:max-h-[420px] [&_.ql-editor]:overflow-y-auto [&_.ql-editor]:text-sm [&_.ql-toolbar]:rounded-t-lg [&_.ql-container]:rounded-b-lg",
 };
 
 export function RichTextEditor({

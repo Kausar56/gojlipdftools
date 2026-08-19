@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 /* themes: false — without this, daisyUI generates its OWN default "light"/
    "dark" themes (secondary=pink, accent=teal, neutral=near-black) in ADDITION
    to the custom "light"/"dark" themes defined below with our actual brand
@@ -94,10 +95,31 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Safety net: no single oversized element (an admin-pasted table, a long
+   unbroken URL, etc.) should ever be able to force the whole page to scroll
+   sideways. Vertical scrolling is untouched. */
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   background-color: var(--color-base-100);
   color: var(--color-base-content);
   font-family: var(--font-sans);
+}
+
+/* Editor-authored rich text (blog posts, tool guides/FAQs) is rendered via
+   dangerouslySetInnerHTML, so an admin can paste arbitrary HTML — a long
+   unbroken token/URL or a wide table would otherwise overflow its narrow
+   content column instead of wrapping or scrolling internally. */
+.prose {
+  overflow-wrap: break-word;
+}
+
+.prose table {
+  display: block;
+  overflow-x: auto;
 }
 
 @keyframes fade-in-up {

@@ -436,6 +436,7 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M12 6v1.5M12 10.5v3M12 16.5V18" strokeDasharray="1.6 1.8" />
     </>
   ),
+  paperclip: <path d="M8.5 12.5l6.5-6.5a3 3 0 0 1 4.2 4.2L11 18.4a5 5 0 0 1-7.1-7.1L12.5 2.7" />,
 };
 
 export function ToolIcon({ name, className }: IconProps & { name: string }) {

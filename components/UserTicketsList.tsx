@@ -43,6 +43,7 @@ export function UserTicketsList({
                 className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-base-200"
               >
                 <div className="min-w-0">
+                  <p className="font-mono text-xs text-base-content/40">{ticket.ticketNumber}</p>
                   <p className="truncate text-sm font-medium text-base-content">{ticket.subject}</p>
                   <p className="text-xs text-base-content/50">Updated {new Date(ticket.updatedAt).toLocaleDateString()}</p>
                 </div>

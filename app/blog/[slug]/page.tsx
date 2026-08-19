@@ -26,7 +26,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       type: "article",
       publishedTime: post.publishedAt ?? undefined,
       modifiedTime: post.updatedAt,
-      authors: post.authorName ? [post.authorName] : undefined,
+      // Always "Gojli Team" — a specific staff member's name never appears
+      // on public-facing pages, regardless of who actually wrote the post.
+      authors: ["Gojli Team"],
       tags: post.tags.length > 0 ? post.tags : undefined,
       images: post.thumbnailUrl ? [{ url: post.thumbnailUrl }] : undefined,
     },
@@ -45,7 +47,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   if (!post) notFound();
 
   const readingMinutes = estimateReadingMinutes(post.contentHtml);
-  const authorName = post.authorName || "Gojli Team";
+  // Always "Gojli Team" — a specific staff member's name never appears on
+  // public-facing pages, regardless of who actually wrote the post (see
+  // post.authorName, which stays admin-only in AdminBlogTable/BlogPostEditor).
+  const authorName = "Gojli Team";
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -56,7 +61,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     keywords: post.tags.length > 0 ? post.tags.join(", ") : undefined,
     datePublished: post.publishedAt ?? post.createdAt,
     dateModified: post.updatedAt,
-    author: { "@type": "Person", name: authorName },
+    author: { "@type": "Organization", name: authorName },
     mainEntityOfPage: { "@type": "WebPage", "@id": `https://www.gojli.com/blog/${post.slug}` },
     publisher: { "@type": "Organization", name: "Gojli" },
   };

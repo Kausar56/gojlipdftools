@@ -13,9 +13,15 @@
 
 create table if not exists public.tickets (
   id uuid primary key default gen_random_uuid(),
+  -- Human-readable id (formatted "GOJ-1001" in app code, see lib/tickets.ts's
+  -- formatTicketNumber) — a bigserial rather than deriving one from `id` so
+  -- it's short and sequential instead of a uuid fragment.
+  seq bigserial not null unique,
   user_id uuid not null references auth.users(id) on delete cascade,
   subject text not null,
   status text not null default 'open' check (status in ('open', 'in_progress', 'resolved', 'closed')),
+  category text check (category in ('pdf_tool', 'account', 'payment', 'bug', 'security', 'other')),
+  priority text not null default 'normal' check (priority in ('low', 'normal', 'high')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -26,10 +32,30 @@ alter table public.tickets drop constraint if exists tickets_status_check;
 alter table public.tickets add constraint tickets_status_check
   check (status in ('open', 'in_progress', 'resolved', 'closed'));
 
+alter table public.tickets add column if not exists seq bigserial;
+alter table public.tickets drop constraint if exists tickets_seq_key;
+alter table public.tickets add constraint tickets_seq_key unique (seq);
+alter table public.tickets add column if not exists category text;
+alter table public.tickets drop constraint if exists tickets_category_check;
+alter table public.tickets add constraint tickets_category_check
+  check (category in ('pdf_tool', 'account', 'payment', 'bug', 'security', 'other'));
+alter table public.tickets add column if not exists priority text not null default 'normal';
+alter table public.tickets drop constraint if exists tickets_priority_check;
+alter table public.tickets add constraint tickets_priority_check
+  check (priority in ('low', 'normal', 'high'));
+
+-- Which staff member (a real admin or a moderator/support grant — see
+-- lib/moderators.ts) is handling this ticket. Nullable: "Unassigned" is the
+-- default and a valid state, not an error. `on delete set null` rather than
+-- cascade — removing someone's staff access shouldn't delete the ticket
+-- they were working on, just un-assign it.
+alter table public.tickets add column if not exists assigned_to uuid references auth.users(id) on delete set null;
+
 alter table public.tickets enable row level security;
 
 create index if not exists tickets_user_id_idx on public.tickets (user_id);
 create index if not exists tickets_status_updated_at_idx on public.tickets (status, updated_at desc);
+create index if not exists tickets_assigned_to_idx on public.tickets (assigned_to);
 
 create or replace function public.set_updated_at()
 returns trigger as $$
@@ -45,7 +71,13 @@ create trigger tickets_set_updated_at
   for each row execute function public.set_updated_at();
 
 -- One row per message in a ticket's thread — the opening message and every
--- reply after it, from either side.
+-- reply after it, from either side. Attachments are stored as an
+-- authenticated (private) Cloudinary asset — public_id + resource_type, NOT
+-- a permanent public URL — see lib/cloudinary.ts's getAttachmentDeliveryUrl,
+-- which mints a signed delivery URL on read, only from the two
+-- ownership/permission-gated code paths (getTicketForUser/getTicketForAdmin
+-- in lib/tickets.ts). That's what keeps one user's attachment from being
+-- reachable by guessing another user's link.
 create table if not exists public.ticket_messages (
   id uuid primary key default gen_random_uuid(),
   ticket_id uuid not null references public.tickets(id) on delete cascade,
@@ -56,9 +88,37 @@ create table if not exists public.ticket_messages (
   -- the time.
   sender_role text not null check (sender_role in ('user', 'staff')),
   body text not null,
+  attachment_public_id text,
+  attachment_resource_type text,
+  attachment_name text,
   created_at timestamptz not null default now()
 );
+
+-- Idempotent pickup for installs that ran an earlier version of this file
+-- (which stored a plain public attachment_url instead).
+alter table public.ticket_messages drop column if exists attachment_url;
+alter table public.ticket_messages add column if not exists attachment_public_id text;
+alter table public.ticket_messages add column if not exists attachment_resource_type text;
+alter table public.ticket_messages add column if not exists attachment_name text;
 
 alter table public.ticket_messages enable row level security;
 
 create index if not exists ticket_messages_ticket_id_idx on public.ticket_messages (ticket_id, created_at);
+
+-- Staff-only remarks on a ticket — never surfaced to the ticket's owner (see
+-- lib/tickets.ts's listNotesForTicket, only ever called from
+-- app/admin/tickets, never from the user-facing app/dashboard/tickets code
+-- path). A separate table rather than a flag on ticket_messages so a future
+-- change to the user-facing query can never accidentally leak one by
+-- forgetting to filter it out.
+create table if not exists public.ticket_notes (
+  id uuid primary key default gen_random_uuid(),
+  ticket_id uuid not null references public.tickets(id) on delete cascade,
+  author_id uuid references auth.users(id) on delete set null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+alter table public.ticket_notes enable row level security;
+
+create index if not exists ticket_notes_ticket_id_idx on public.ticket_notes (ticket_id, created_at);

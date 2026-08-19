@@ -65,3 +65,29 @@ export async function getRecentAuditLog(options?: { limit?: number; actorId?: st
     createdAt: row.created_at as string,
   }));
 }
+
+/** A single entity's activity history, oldest first — e.g. the "Activity
+ *  History" panel on a support ticket's admin page, built from the same
+ *  entries logAdminAction already writes for every ticket mutation
+ *  (ticket.reply/status_change/category_change/priority_change/assign/note)
+ *  instead of a separate events table. */
+export async function getAuditLogForTarget(targetType: string, targetId: string): Promise<AuditEntry[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("admin_audit_log")
+    .select("id, actor_id, actor_email, action, target_type, target_id, details, created_at")
+    .eq("target_type", targetType)
+    .eq("target_id", targetId)
+    .order("created_at", { ascending: true });
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    actorId: row.actor_id as string | null,
+    actorEmail: row.actor_email as string | null,
+    action: row.action as string,
+    targetType: row.target_type as string | null,
+    targetId: row.target_id as string | null,
+    details: (row.details as Record<string, unknown> | null) ?? null,
+    createdAt: row.created_at as string,
+  }));
+}

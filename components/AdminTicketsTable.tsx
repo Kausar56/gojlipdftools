@@ -6,10 +6,13 @@ import {
   TICKET_STATUS_LABELS,
   TICKET_STATUS_BADGE_CLASS,
   TICKET_STATUSES,
+  TICKET_PRIORITY_LABELS,
+  TICKET_PRIORITY_BADGE_CLASS,
   type Ticket,
   type TicketStatus,
 } from "@/lib/tickets";
 import { PaginationControls } from "./PaginationControls";
+import { UserAvatar } from "./UserAvatar";
 
 const PAGE_SIZE = 20;
 type StatusFilter = TicketStatus | "all";
@@ -21,11 +24,14 @@ export function AdminTicketsTable({ tickets }: { tickets: Ticket[] }) {
 
   const byStatus = statusFilter === "all" ? tickets : tickets.filter((ticket) => ticket.status === statusFilter);
   const filtered = search.trim()
-    ? byStatus.filter(
-        (ticket) =>
-          ticket.subject.toLowerCase().includes(search.trim().toLowerCase()) ||
-          (ticket.userEmail ?? "").toLowerCase().includes(search.trim().toLowerCase()),
-      )
+    ? byStatus.filter((ticket) => {
+        const query = search.trim().toLowerCase();
+        return (
+          ticket.subject.toLowerCase().includes(query) ||
+          (ticket.userEmail ?? "").toLowerCase().includes(query) ||
+          (ticket.userName ?? "").toLowerCase().includes(query)
+        );
+      })
     : byStatus;
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -71,7 +77,7 @@ export function AdminTicketsTable({ tickets }: { tickets: Ticket[] }) {
           setSearch(event.target.value);
           setPage(0);
         }}
-        placeholder="Search by subject or user email..."
+        placeholder="Search by subject, name, or email..."
         className="input input-bordered input-sm mt-4 w-full sm:max-w-xs"
       />
 
@@ -79,8 +85,10 @@ export function AdminTicketsTable({ tickets }: { tickets: Ticket[] }) {
         <table className="table">
           <thead>
             <tr>
-              <th>Subject</th>
+              <th>Ticket</th>
               <th>User</th>
+              <th>Assigned to</th>
+              <th>Priority</th>
               <th>Status</th>
               <th>Updated</th>
               <th />
@@ -89,15 +97,32 @@ export function AdminTicketsTable({ tickets }: { tickets: Ticket[] }) {
           <tbody>
             {pageTickets.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center text-base-content/50">
+                <td colSpan={7} className="text-center text-base-content/50">
                   {tickets.length === 0 ? "No tickets yet." : "No tickets match."}
                 </td>
               </tr>
             ) : (
               pageTickets.map((ticket) => (
                 <tr key={ticket.id}>
-                  <td className="max-w-xs truncate">{ticket.subject}</td>
-                  <td className="max-w-40 truncate text-sm text-base-content/70">{ticket.userEmail ?? "—"}</td>
+                  <td className="max-w-xs">
+                    <p className="font-mono text-xs text-base-content/40">{ticket.ticketNumber}</p>
+                    <p className="truncate">{ticket.subject}</p>
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <UserAvatar name={ticket.userName} email={ticket.userEmail} avatarUrl={ticket.userAvatarUrl} className="h-6 w-6" />
+                      <div className="min-w-0 max-w-40">
+                        <p className="truncate text-sm text-base-content">{ticket.userName || ticket.userEmail || "—"}</p>
+                        {ticket.userName && <p className="truncate text-xs text-base-content/50">{ticket.userEmail}</p>}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="max-w-36 truncate text-sm text-base-content/70">{ticket.assignedToEmail ?? "Unassigned"}</td>
+                  <td>
+                    <span className={`badge badge-sm ${TICKET_PRIORITY_BADGE_CLASS[ticket.priority]}`}>
+                      {TICKET_PRIORITY_LABELS[ticket.priority]}
+                    </span>
+                  </td>
                   <td>
                     <span className={`badge badge-sm ${TICKET_STATUS_BADGE_CLASS[ticket.status]}`}>
                       {TICKET_STATUS_LABELS[ticket.status]}

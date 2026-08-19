@@ -39,10 +39,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="flex min-h-screen bg-base-200">
+    // h-screen + overflow-hidden on the shell (instead of min-h-screen) so the
+    // page itself never scrolls — only the content pane on the right does.
+    // The sidebar sits in its own flex item at full viewport height and is
+    // never affected by how tall the current page's content is.
+    <div className="flex h-screen overflow-hidden bg-base-200">
       <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
       <AdminSidebar email={user.email ?? ""} access={access} />
-      <div className="flex-1 overflow-x-hidden pt-14 lg:pt-0">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pt-14 lg:pt-0">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:px-8 sm:py-8">{children}</div>
       </div>
     </div>

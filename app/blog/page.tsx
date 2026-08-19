@@ -49,8 +49,10 @@ export default async function BlogIndexPage() {
                   </div>
                 )}
                 <p className="mt-2 flex items-center gap-1.5 text-xs text-base-content/40">
-                  {post.authorName && <span>{post.authorName}</span>}
-                  {post.authorName && post.publishedAt && <span>·</span>}
+                  {/* Always "Gojli Team" regardless of who actually wrote the
+                      post — visitors never see a specific staff member's name. */}
+                  <span>Gojli Team</span>
+                  {post.publishedAt && <span>·</span>}
                   {post.publishedAt && (
                     <span>
                       {new Date(post.publishedAt).toLocaleDateString(undefined, {
