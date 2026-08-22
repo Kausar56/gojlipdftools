@@ -25,7 +25,9 @@ export default async function AdminSettingsPage() {
 
       <div>
         <h2 className="text-sm font-semibold text-base-content/80">Announcement banner</h2>
-        <p className="mt-1 text-xs text-base-content/50">Shown at the top of every page on the site.</p>
+        <p className="mt-1 text-xs text-base-content/50">
+          Shown at the top of the site — never in the admin panel. Choose which pages below.
+        </p>
         <div className="mt-2">
           <BannerEditor banner={banner} action={updateBanner} />
         </div>

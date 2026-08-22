@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import { TICKET_ATTACHMENT_ACCEPT, TICKET_ATTACHMENT_MAX_BYTES, type TicketMessage, type TicketStatus } from "@/lib/tickets";
 import { describeError } from "@/lib/errorHelpers";
@@ -38,6 +39,7 @@ export function TicketThread({
   messages,
   viewerRole,
   status,
+  locked = false,
   replyAction,
   reopenAction,
 }: {
@@ -49,6 +51,12 @@ export function TicketThread({
    *  the page instead, so reopenAction is only ever passed for viewerRole
    *  "user". */
   status: TicketStatus;
+  /** Admin-only escalation on top of "closed" (see lib/tickets.ts's Ticket
+   *  type and app/admin/tickets/actions.ts's lockTicket) — once true, the
+   *  Reopen button is replaced with a pointer to open a new ticket instead,
+   *  since reopenAction would just reject it anyway. Only meaningful for
+   *  viewerRole "user"; staff always keep full status control. */
+  locked?: boolean;
   replyAction: (formData: FormData) => void | Promise<void>;
   reopenAction?: () => void | Promise<void>;
 }) {
@@ -133,6 +141,15 @@ export function TicketThread({
                   </p>
                   <p className="mt-1 whitespace-pre-wrap">{message.body}</p>
                   {message.attachmentUrl && <AttachmentLink url={message.attachmentUrl} name={message.attachmentName} />}
+                  {/* Only ever shown on your own messages, once the other
+                      side has viewed the ticket — see lib/tickets.ts's
+                      markMessagesRead, triggered just by opening the thread. */}
+                  {isMine && message.readAt && (
+                    <p className="mt-0.5 flex items-center justify-end gap-0.5 text-[11px] text-primary-content/70">
+                      <ToolIcon name="check" className="h-3 w-3" />
+                      Seen
+                    </p>
+                  )}
                 </div>
               </div>
             );
@@ -145,11 +162,22 @@ export function TicketThread({
           layout + shrink-0 — the message list above is what scrolls. */}
       {isClosed ? (
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-base-300 bg-base-200/50 px-4 py-3 text-sm text-base-content/60">
-          <span>This ticket is closed — replies are disabled.</span>
-          {reopenAction && (
-            <button type="button" onClick={handleReopen} disabled={isReopening} className="btn btn-outline btn-xs">
-              {isReopening ? "Reopening..." : "Reopen Ticket"}
-            </button>
+          {locked ? (
+            <>
+              <span>This ticket has been permanently closed by our support team.</span>
+              <Link href="/dashboard/tickets" className="btn btn-outline btn-xs shrink-0">
+                Open a New Ticket
+              </Link>
+            </>
+          ) : (
+            <>
+              <span>This ticket is closed — replies are disabled.</span>
+              {reopenAction && (
+                <button type="button" onClick={handleReopen} disabled={isReopening} className="btn btn-outline btn-xs">
+                  {isReopening ? "Reopening..." : "Reopen Ticket"}
+                </button>
+              )}
+            </>
           )}
         </div>
       ) : (

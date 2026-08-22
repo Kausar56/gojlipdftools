@@ -110,13 +110,18 @@ body {
 }
 
 /* Editor-authored rich text (blog posts, tool guides/FAQs) is rendered via
-   dangerouslySetInnerHTML, so an admin can paste arbitrary HTML — a long
-   unbroken token/URL or a wide table would otherwise overflow its narrow
-   content column instead of wrapping or scrolling internally. */
-.prose {
-  overflow-wrap: break-word;
-}
-
+   dangerouslySetInnerHTML, so an admin can paste arbitrary HTML — a wide
+   table would otherwise overflow its narrow content column instead of
+   scrolling internally.
+   (This used to also set `overflow-wrap: break-word` on all of .prose as a
+   defense against long unbroken URLs, but that broke ordinary short words
+   mid-letter — e.g. "position" -> "positio"/"n." — because break-word
+   permits a mid-word split whenever a word doesn't fit the *remaining*
+   space on the current line, not only when it wouldn't fit a fresh line
+   either. Normal prose readability matters far more than that rare edge
+   case, so it's been removed; a genuinely unbreakable long token still just
+   overflows visibly rather than wrapping, which reads better than every
+   short word risking a random mid-word break.) */
 .prose table {
   display: block;
   overflow-x: auto;

@@ -1,119 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import toast from "react-hot-toast";
+import { useState } from "react";
+import Link from "next/link";
 import type { ManagedUser } from "@/lib/userAdmin";
-import type { PlanId } from "@/lib/planLimits";
-import { describeError, isRedirectError } from "@/lib/errorHelpers";
 import { PaginationControls } from "./PaginationControls";
+import { UserPlanSelect } from "./UserPlanSelect";
+import { UserBanToggleButton } from "./UserBanToggleButton";
+import { UserDeleteButton } from "./UserDeleteButton";
 
 const PAGE_SIZE = 20;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-function PlanSelect({
-  user,
-  updatePlanAction,
-}: {
-  user: ManagedUser;
-  updatePlanAction: (userId: string, formData: FormData) => void | Promise<void>;
-}) {
-  const [plan, setPlan] = useState(user.plan);
-  const [isPending, startTransition] = useTransition();
-
-  // A <select> inside <form action={fn}> that auto-submits on change gets
-  // reset to its defaultValue the instant it submits (React's
-  // requestFormReset), snapping the dropdown back to the old plan even
-  // though the save went through — a reload shows the correct plan. Calling
-  // the action directly (no <form>) skips that reset.
-  function handleChange(event: React.ChangeEvent<HTMLSelectElement>) {
-    const value = event.target.value as PlanId;
-    const previous = plan;
-    setPlan(value);
-    const formData = new FormData();
-    formData.set("plan", value);
-    startTransition(async () => {
-      try {
-        await updatePlanAction(user.id, formData);
-        toast.success(`${user.email}'s plan changed to ${value}.`);
-      } catch (error) {
-        setPlan(previous);
-        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't change the plan."));
-      }
-    });
-  }
-
-  return (
-    <select
-      value={plan}
-      onChange={handleChange}
-      disabled={isPending}
-      className="select select-bordered select-xs capitalize"
-    >
-      <option value="free">Free</option>
-      <option value="pro">Pro</option>
-      <option value="business">Business</option>
-    </select>
-  );
-}
-
-function BanToggleButton({
-  user,
-  banAction,
-  unbanAction,
-}: {
-  user: ManagedUser;
-  banAction: (userId: string) => void | Promise<void>;
-  unbanAction: (userId: string) => void | Promise<void>;
-}) {
-  const [isPending, startTransition] = useTransition();
-
-  function handleClick() {
-    startTransition(async () => {
-      try {
-        if (user.isBanned) {
-          await unbanAction(user.id);
-          toast.success(`${user.email} unbanned.`);
-        } else {
-          await banAction(user.id);
-          toast.success(`${user.email} banned.`);
-        }
-      } catch (error) {
-        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't update the ban status."));
-      }
-    });
-  }
-
-  return (
-    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-primary hover:underline">
-      {user.isBanned ? "Unban" : "Ban"}
-    </button>
-  );
-}
-
-function DeleteUserButton({ user, deleteAction }: { user: ManagedUser; deleteAction: (userId: string) => void | Promise<void> }) {
-  const [isPending, startTransition] = useTransition();
-
-  function handleClick() {
-    if (!window.confirm(`Permanently delete ${user.email}? This can't be undone.`)) return;
-    startTransition(async () => {
-      try {
-        await deleteAction(user.id);
-        toast.success(`${user.email} deleted.`);
-      } catch (error) {
-        if (isRedirectError(error)) throw error;
-        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't delete this user."));
-      }
-    });
-  }
-
-  return (
-    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-error hover:underline">
-      Delete
-    </button>
-  );
 }
 
 export function AdminUsersTable({
@@ -184,10 +82,14 @@ export function AdminUsersTable({
             ) : (
               pageUsers.map((user) => (
                 <tr key={user.id}>
-                  <td className="max-w-48 truncate">{user.email}</td>
+                  <td className="max-w-48 truncate">
+                    <Link href={`/admin/users/${user.id}`} className="text-primary hover:underline">
+                      {user.email}
+                    </Link>
+                  </td>
                   <td>
                     {canManage && updatePlanAction ? (
-                      <PlanSelect user={user} updatePlanAction={updatePlanAction} />
+                      <UserPlanSelect userId={user.id} userEmail={user.email} plan={user.plan} updatePlanAction={updatePlanAction} />
                     ) : (
                       <span className="badge badge-neutral badge-sm capitalize">{user.plan}</span>
                     )}
@@ -195,7 +97,7 @@ export function AdminUsersTable({
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
                     {user.isBanned ? (
-                      <span className="badge badge-error badge-sm">Banned</span>
+                      <span className="badge badge-error badge-sm">Suspended</span>
                     ) : (
                       <span className="badge badge-ghost badge-sm">Active</span>
                     )}
@@ -203,8 +105,14 @@ export function AdminUsersTable({
                   {canManage && banAction && unbanAction && deleteAction && (
                     <td className="text-right">
                       <div className="flex items-center justify-end gap-3">
-                        <BanToggleButton user={user} banAction={banAction} unbanAction={unbanAction} />
-                        <DeleteUserButton user={user} deleteAction={deleteAction} />
+                        <UserBanToggleButton
+                          userId={user.id}
+                          userEmail={user.email}
+                          isBanned={user.isBanned}
+                          banAction={banAction}
+                          unbanAction={unbanAction}
+                        />
+                        <UserDeleteButton userId={user.id} userEmail={user.email} deleteAction={deleteAction} />
                       </div>
                     </td>
                   )}

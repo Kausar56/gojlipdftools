@@ -38,6 +38,11 @@ export type Ticket = {
   userAvatarUrl: string | null;
   subject: string;
   status: TicketStatus;
+  // Admin-only escalation on top of `status === "closed"` — see
+  // docs/tickets-schema.sql's comment. When true, the user can no longer
+  // reopen this ticket (see reopenTicketAsUser) and is pointed at opening a
+  // new one instead.
+  locked: boolean;
   category: TicketCategory | null;
   priority: TicketPriority;
   assignedToId: string | null;
@@ -64,6 +69,11 @@ export type TicketMessage = {
   attachmentPublicId: string | null;
   attachmentResourceType: string | null;
   attachmentName: string | null;
+  // Set once the *other* side has viewed the ticket — see markMessagesRead.
+  // Only meaningful for the sender's own view (rendered as "Seen" under
+  // their own messages in components/TicketThread.tsx); irrelevant for a
+  // message you received.
+  readAt: string | null;
   createdAt: string;
 };
 
@@ -180,6 +190,7 @@ function toTicket(row: Record<string, unknown>, userInfoById: Map<string, UserIn
     userAvatarUrl: userInfo?.avatarUrl ?? null,
     subject: row.subject as string,
     status: row.status as TicketStatus,
+    locked: Boolean(row.locked),
     category: (row.category as TicketCategory | null) ?? null,
     priority: (row.priority as TicketPriority) ?? "normal",
     assignedToId,
@@ -201,11 +212,12 @@ function toMessage(row: Record<string, unknown>, userInfoById: Map<string, UserI
     attachmentPublicId: (row.attachment_public_id as string | null) ?? null,
     attachmentResourceType: (row.attachment_resource_type as string | null) ?? null,
     attachmentName: (row.attachment_name as string | null) ?? null,
+    readAt: (row.read_at as string | null) ?? null,
     createdAt: row.created_at as string,
   };
 }
 
-const TICKET_COLUMNS = "id, seq, user_id, subject, status, category, priority, assigned_to, created_at, updated_at";
+const TICKET_COLUMNS = "id, seq, user_id, subject, status, locked, category, priority, assigned_to, created_at, updated_at";
 
 /** A user's own tickets, most recently updated first — used by
  *  /dashboard/tickets. Doesn't need identity resolution (it's always their
@@ -249,11 +261,28 @@ async function fetchMessages(ticketId: string, userInfoById: Map<string, UserInf
   const admin = createAdminClient();
   const { data } = await admin
     .from("ticket_messages")
-    .select("id, ticket_id, sender_id, sender_role, body, attachment_public_id, attachment_resource_type, attachment_name, created_at")
+    .select(
+      "id, ticket_id, sender_id, sender_role, body, attachment_public_id, attachment_resource_type, attachment_name, read_at, created_at",
+    )
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
   return (data ?? []).map((row) => toMessage(row, userInfoById));
+}
+
+/** Marks every message from the *other* side as read — called from
+ *  getTicketForUser/getTicketForAdmin below, so simply viewing a ticket's
+ *  thread is what produces the "Seen" indicator on the other party's
+ *  messages, no separate mark-as-read action needed. */
+async function markMessagesRead(ticketId: string, readerRole: "user" | "staff"): Promise<void> {
+  const admin = createAdminClient();
+  const senderRole = readerRole === "staff" ? "user" : "staff";
+  await admin
+    .from("ticket_messages")
+    .update({ read_at: new Date().toISOString() })
+    .eq("ticket_id", ticketId)
+    .eq("sender_role", senderRole)
+    .is("read_at", null);
 }
 
 /** A single ticket + its full message thread, only if it belongs to
@@ -275,6 +304,7 @@ export async function getTicketForUser(ticketId: string, userId: string): Promis
   // (sender_role "staff"), and shouldn't see which specific staff member —
   // or which staff email is currently assigned — replied.
   const ticket = toTicket(row, new Map());
+  await markMessagesRead(ticketId, "user");
   const messages = await fetchMessages(ticketId, new Map());
   return { ticket, messages };
 }
@@ -298,6 +328,7 @@ export async function getTicketForAdmin(
 
   const userInfoById = buildUserInfoMap(usersData?.users ?? []);
   const ticket = toTicket(row, userInfoById);
+  await markMessagesRead(ticketId, "staff");
   const messages = await fetchMessages(ticketId, userInfoById);
   return { ticket, messages };
 }

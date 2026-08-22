@@ -23,6 +23,10 @@ function describeActivity(entry: AuditEntry): string {
       return details.assigneeId ? `${actor} assigned this ticket` : `${actor} unassigned this ticket`;
     case "ticket.note":
       return `${actor} added an internal note`;
+    case "ticket.lock":
+      return `${actor} permanently closed this ticket`;
+    case "ticket.unlock":
+      return `${actor} unlocked this ticket`;
     default:
       return `${actor} — ${entry.action}`;
   }

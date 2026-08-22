@@ -81,10 +81,13 @@ export async function replyToTicketAsStaff(ticketId: string, formData: FormData)
   });
   if (error) throw new Error(error.message);
 
-  // Touch updated_at (via the set_updated_at trigger) so this ticket sorts
-  // back to the top of both lists — status is deliberately untouched here,
-  // a reply alone doesn't change it; see updateTicketStatus for that.
-  await admin.from("tickets").update({ status: ticket.status }).eq("id", ticketId);
+  // A staff reply also bumps updated_at (via the set_updated_at trigger) so
+  // this ticket sorts back to the top of both lists. The status itself only
+  // auto-advances "open" -> "in_progress" — the first reply is what actually
+  // starts the work — every other transition (resolved/closed/reopened)
+  // stays a deliberate choice via updateTicketStatus, never automatic.
+  const nextStatus = ticket.status === "open" ? "in_progress" : ticket.status;
+  await admin.from("tickets").update({ status: nextStatus }).eq("id", ticketId);
 
   await notifyUser(ticket.user_id as string, ticket.subject as string, ticketId);
 
@@ -188,6 +191,35 @@ export async function assignTicket(ticketId: string, formData: FormData) {
 
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath("/admin/tickets");
+}
+
+// Admin-only, like assign/priority — locking cuts the user off from ever
+// reopening this ticket again (see reopenTicketAsUser's check), which is
+// too consequential to leave to a scoped Support/Moderator grant.
+export async function lockTicket(ticketId: string) {
+  const { staffUser, access } = await requireTicketAccess();
+  if (!isTicketFullAccess(access)) throw new Error("Only an admin can permanently close a ticket.");
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("tickets").update({ status: "closed", locked: true }).eq("id", ticketId);
+  if (error) throw new Error(error.message);
+
+  await logAdminAction({ actorId: staffUser.id, actorEmail: staffUser.email, action: "ticket.lock", targetType: "ticket", targetId: ticketId });
+
+  revalidateTicketPaths(ticketId);
+}
+
+export async function unlockTicket(ticketId: string) {
+  const { staffUser, access } = await requireTicketAccess();
+  if (!isTicketFullAccess(access)) throw new Error("Only an admin can unlock a ticket.");
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("tickets").update({ locked: false }).eq("id", ticketId);
+  if (error) throw new Error(error.message);
+
+  await logAdminAction({ actorId: staffUser.id, actorEmail: staffUser.email, action: "ticket.unlock", targetType: "ticket", targetId: ticketId });
+
+  revalidateTicketPaths(ticketId);
 }
 
 export async function addInternalNote(ticketId: string, formData: FormData) {

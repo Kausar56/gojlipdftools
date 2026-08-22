@@ -38,7 +38,7 @@ export function isModeratorPermission(value: string): value is ModeratorPermissi
 // the preset checkbox bundle ROLE_PRESETS fills in when adding someone, and
 // (b) shows a clearer badge than "Moderator" for everyone, in the
 // moderators list and the admin sidebar.
-export const MODERATOR_ROLES = ["admin", "moderator", "support"] as const;
+export const MODERATOR_ROLES = ["admin", "editor", "moderator", "support"] as const;
 export type ModeratorRole = (typeof MODERATOR_ROLES)[number];
 
 export function isModeratorRole(value: string): value is ModeratorRole {
@@ -47,6 +47,7 @@ export function isModeratorRole(value: string): value is ModeratorRole {
 
 export const MODERATOR_ROLE_LABELS: Record<ModeratorRole, string> = {
   admin: "Admin",
+  editor: "Editor",
   moderator: "Moderator",
   support: "Support",
 };
@@ -70,9 +71,12 @@ export const MODERATOR_ROLE_PRESETS: Record<ModeratorRole, ModeratorPermission[]
     "audit_log:view_own",
     "tickets:manage",
   ],
+  // Content-focused, no ticket/community responsibilities — blog posts plus
+  // the tool guide/FAQ copy shown on every tool page.
+  editor: ["blog:create", "blog:edit_own", "blog:delete_own", "tool_content:edit"],
   // Ticket handling isn't specific to any one role — a Moderator can field
   // support tickets alongside blog work just as easily as Admin or Support
-  // can, so all three presets include it.
+  // can, so every preset except Editor (pure content, no ticket duty) includes it.
   moderator: ["blog:create", "blog:edit_own", "blog:delete_own", "tickets:manage"],
   // Support agents need to see enough to help a user (and handle their
   // tickets), not change accounts or content.

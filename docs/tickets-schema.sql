@@ -51,6 +51,15 @@ alter table public.tickets add constraint tickets_priority_check
 -- they were working on, just un-assign it.
 alter table public.tickets add column if not exists assigned_to uuid references auth.users(id) on delete set null;
 
+-- A "closed" ticket can normally still be reopened by its owner (see
+-- app/dashboard/tickets/actions.ts's reopenTicketAsUser) — `locked` is an
+-- Admin-only escalation on top of that: once true, reopenTicketAsUser
+-- refuses, and the user is pointed at opening a new ticket instead (see
+-- app/admin/tickets/actions.ts's lockTicket/unlockTicket). Independent of
+-- `status` rather than a 5th status value, since it's a permission flag
+-- ("can this be reopened"), not a stage in the ticket's lifecycle.
+alter table public.tickets add column if not exists locked boolean not null default false;
+
 alter table public.tickets enable row level security;
 
 create index if not exists tickets_user_id_idx on public.tickets (user_id);
@@ -91,6 +100,12 @@ create table if not exists public.ticket_messages (
   attachment_public_id text,
   attachment_resource_type text,
   attachment_name text,
+  -- Set when the *other* side views the ticket (see lib/tickets.ts's
+  -- markMessagesRead, called from getTicketForUser/getTicketForAdmin) — a
+  -- message only ever has one recipient in a two-party thread, so a single
+  -- timestamp is enough for a "Seen" indicator, no separate read-receipts
+  -- table needed.
+  read_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -100,6 +115,7 @@ alter table public.ticket_messages drop column if exists attachment_url;
 alter table public.ticket_messages add column if not exists attachment_public_id text;
 alter table public.ticket_messages add column if not exists attachment_resource_type text;
 alter table public.ticket_messages add column if not exists attachment_name text;
+alter table public.ticket_messages add column if not exists read_at timestamptz;
 
 alter table public.ticket_messages enable row level security;
 

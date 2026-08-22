@@ -5,9 +5,12 @@ import { isModeratorPermission, isModeratorRole, type ModeratorPermission, type 
 export type ModeratorInfo = {
   id: string;
   email: string;
+  fullName: string | null;
   role: ModeratorRole;
   permissions: ModeratorPermission[];
   createdAt: string;
+  disabled: boolean;
+  lastSignInAt: string | null;
 };
 
 export type SignupUser = { id: string; email: string };
@@ -19,21 +22,25 @@ export async function listModerators(): Promise<ModeratorInfo[]> {
   const admin = createAdminClient();
   const { data: rows } = await admin
     .from("moderators")
-    .select("id, permissions, role, created_at")
+    .select("id, permissions, role, created_at, disabled")
     .order("created_at", { ascending: false });
   if (!rows || rows.length === 0) return [];
 
   const { data: usersData } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  const emailById = new Map((usersData?.users ?? []).map((user) => [user.id, user.email ?? "(no email)"]));
+  const userById = new Map((usersData?.users ?? []).map((user) => [user.id, user]));
 
   return rows.map((row) => {
     const roleValue = row.role as string | null;
+    const authUser = userById.get(row.id as string);
     return {
       id: row.id as string,
-      email: emailById.get(row.id as string) ?? "(unknown)",
+      email: authUser?.email ?? "(unknown)",
+      fullName: (authUser?.user_metadata?.full_name as string | undefined) ?? null,
       role: roleValue && isModeratorRole(roleValue) ? roleValue : "moderator",
       permissions: ((row.permissions ?? []) as string[]).filter(isModeratorPermission),
       createdAt: row.created_at as string,
+      disabled: Boolean(row.disabled),
+      lastSignInAt: authUser?.last_sign_in_at ?? null,
     };
   });
 }

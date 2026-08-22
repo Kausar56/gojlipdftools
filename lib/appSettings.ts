@@ -3,14 +3,62 @@ import { createAdminClient } from "./supabase/admin";
 
 export type ToolStatusMap = Record<string, { disabled: boolean; message?: string }>;
 
+export type BannerSize = "sm" | "md" | "lg";
+
 export type BannerSettings = {
+  // Regenerated on every save (see setBannerSettings) — the dismiss-state
+  // key a visitor's browser stores (see components/SiteBanner.tsx), so
+  // editing and re-publishing a banner shows it again even to someone who
+  // already dismissed the previous version.
+  id: string;
   message: string;
   type: "info" | "warning" | "success";
   active: boolean;
+  size: BannerSize;
+  // "all" (every non-admin page) or an explicit allow-list of exact paths
+  // ("/" for the homepage, "/merge-pdf", etc.) — see components/SiteBanner.tsx.
+  // The admin panel is excluded unconditionally regardless of this setting.
+  pages: "all" | string[];
+  dismissible: boolean;
+  // null = only for the current page load (no persistence — a refresh brings
+  // it back); a number = persisted that many days via localStorage.
+  dismissDurationDays: number | null;
+  ctaLabel: string | null;
+  ctaUrl: string | null;
+  // ISO 8601, or null for no bound on that side.
+  startAt: string | null;
+  endAt: string | null;
 };
 
 const TOOL_STATUS_KEY = "tool_status";
 const BANNER_KEY = "banner";
+
+const DEFAULT_BANNER_EXTRAS = {
+  size: "md" as BannerSize,
+  pages: "all" as const,
+  dismissible: true,
+  dismissDurationDays: null,
+  ctaLabel: null,
+  ctaUrl: null,
+  startAt: null,
+  endAt: null,
+};
+
+/** Backfills fields that didn't exist on a banner saved before this feature
+ *  set was added — app_settings.value is a schemaless JSON blob, so an old
+ *  row simply won't have them. Without this, every consumer would need its
+ *  own `??` fallback chain, and it's easy to miss one. */
+function normalizeBanner(raw: Partial<BannerSettings> | null | undefined): BannerSettings | null {
+  if (!raw || !raw.message) return null;
+  return {
+    ...DEFAULT_BANNER_EXTRAS,
+    ...raw,
+    id: raw.id ?? "legacy",
+    message: raw.message,
+    type: raw.type ?? "info",
+    active: raw.active ?? false,
+  };
+}
 
 // The service-role client (no next/headers cookies() dependency) on purpose:
 // this reads on every tool-page view and the root layout, so touching
@@ -34,7 +82,7 @@ async function readBannerFresh(): Promise<BannerSettings | null> {
   try {
     const admin = createAdminClient();
     const { data } = await admin.from("app_settings").select("value").eq("key", BANNER_KEY).maybeSingle();
-    return (data?.value as BannerSettings | undefined) ?? null;
+    return normalizeBanner(data?.value as Partial<BannerSettings> | undefined);
   } catch {
     return null;
   }

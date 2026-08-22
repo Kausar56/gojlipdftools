@@ -49,8 +49,13 @@ export async function resolveViewerAccess(
   if (isAdminEmail(user.email)) return { kind: "admin", userId: user.id, email: user.email ?? "" };
 
   const admin = createAdminClient();
-  const { data } = await admin.from("moderators").select("permissions, role").eq("id", user.id).maybeSingle();
+  const { data } = await admin.from("moderators").select("permissions, role, disabled").eq("id", user.id).maybeSingle();
   if (!data) return { kind: "none" };
+  // A disabled grant is treated exactly like no grant at all — the row and
+  // its permissions/role stay saved in the DB so re-enabling restores them
+  // as-is, but every hasPermission() check fails in the meantime. See
+  // app/admin/moderators/actions.ts's disableTeamMember/enableTeamMember.
+  if (data.disabled) return { kind: "none" };
 
   const permissions = ((data.permissions ?? []) as string[]).filter(isModeratorPermission);
   // Rows granted before the `role` column existed have no value here yet —

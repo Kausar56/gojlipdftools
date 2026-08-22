@@ -85,11 +85,12 @@ export async function replyToTicketAsUser(ticketId: string, formData: FormData) 
   // Ownership check — a user can only reply to their own ticket.
   const { data: ticket } = await admin
     .from("tickets")
-    .select("status, subject, assigned_to")
+    .select("status, locked, subject, assigned_to")
     .eq("id", ticketId)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!ticket) throw new Error("Ticket not found.");
+  if (ticket.locked) throw new Error("This ticket has been permanently closed. Please open a new ticket for further help.");
   // A closed ticket is frozen — the user has to explicitly reopen it first
   // (see reopenTicketAsUser) rather than a reply silently reopening it.
   if (ticket.status === "closed") throw new Error("This ticket is closed. Reopen it first to add a reply.");
@@ -134,11 +135,15 @@ export async function reopenTicketAsUser(ticketId: string) {
   // Ownership check — a user can only reopen their own ticket.
   const { data: ticket } = await admin
     .from("tickets")
-    .select("status")
+    .select("status, locked")
     .eq("id", ticketId)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!ticket) throw new Error("Ticket not found.");
+  // Admin-only escalation on top of "closed" — see app/admin/tickets/
+  // actions.ts's lockTicket. Once locked, this ticket is done for good; the
+  // user needs to open a new one for further help.
+  if (ticket.locked) throw new Error("This ticket has been permanently closed. Please open a new ticket for further help.");
   if (ticket.status !== "closed") return;
 
   const { error } = await admin.from("tickets").update({ status: "open" }).eq("id", ticketId);

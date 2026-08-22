@@ -27,6 +27,7 @@ export default async function DashboardPage() {
           plan={plan}
           monthlyUsed={monthlyUsed}
           monthlyLimit={getPlanLimits(plan).monthlyConversions}
+          isBanned={data.user.app_metadata?.banned === true}
         />
       );
     }

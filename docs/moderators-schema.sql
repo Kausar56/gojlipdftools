@@ -27,7 +27,16 @@ create table if not exists public.moderators (
 alter table public.moderators add column if not exists role text not null default 'moderator';
 alter table public.moderators drop constraint if exists moderators_role_check;
 alter table public.moderators add constraint moderators_role_check
-  check (role in ('admin', 'moderator', 'support'));
+  check (role in ('admin', 'editor', 'moderator', 'support'));
+
+-- "Disable access" (see components/TeamManager.tsx) — revokes admin panel
+-- access instantly without deleting the grant, so re-enabling restores the
+-- exact same role/permissions. Checked in lib/adminAuth.ts's
+-- resolveViewerAccess, which treats a disabled row the same as no grant at
+-- all. Distinct from a suspended *user* account (app_metadata.banned, see
+-- app/admin/users/actions.ts) — this only affects admin panel access, not
+-- whether they can use the product as a regular customer.
+alter table public.moderators add column if not exists disabled boolean not null default false;
 
 alter table public.moderators enable row level security;
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentViewerAccess } from "@/lib/adminAuth";
-import { logAdminAction } from "@/lib/auditLog";
+import { logAdminAction, getAuditLogForTarget, type AuditEntry } from "@/lib/auditLog";
 import { isModeratorPermission, isModeratorRole, type ModeratorPermission } from "@/lib/permissions";
 
 // Only a real admin (never a moderator) can grant, change, or revoke
@@ -88,4 +88,69 @@ export async function revokeModerator(userId: string) {
   });
 
   revalidatePath("/admin/moderators");
+}
+
+// "Disable access" revokes admin panel access instantly (see
+// lib/adminAuth.ts's resolveViewerAccess) without deleting the grant, so
+// re-enabling restores the exact same role/permissions — distinct from
+// revokeModerator above, which deletes the row entirely, and from
+// suspending a *user* account (app/admin/users/actions.ts's banUser), which
+// only affects using the product as a customer, not admin panel access.
+export async function disableTeamMember(userId: string) {
+  const admin_user = await requireFullAdmin();
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("moderators").update({ disabled: true }).eq("id", userId);
+  if (error) throw new Error(error.message);
+
+  await logAdminAction({ actorId: admin_user.id, actorEmail: admin_user.email, action: "moderator.disable", targetType: "user", targetId: userId });
+
+  revalidatePath("/admin/moderators");
+}
+
+export async function enableTeamMember(userId: string) {
+  const admin_user = await requireFullAdmin();
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("moderators").update({ disabled: false }).eq("id", userId);
+  if (error) throw new Error(error.message);
+
+  await logAdminAction({ actorId: admin_user.id, actorEmail: admin_user.email, action: "moderator.enable", targetType: "user", targetId: userId });
+
+  revalidatePath("/admin/moderators");
+}
+
+/** Sends the team member Supabase's normal "reset your password" email —
+ *  same resetPasswordForEmail flow as components/ForgotPasswordForm.tsx's
+ *  self-service one, just triggered by an admin on someone else's behalf. */
+export async function resetTeamMemberPassword(userId: string) {
+  const admin_user = await requireFullAdmin();
+
+  const admin = createAdminClient();
+  const { data, error: lookupError } = await admin.auth.admin.getUserById(userId);
+  if (lookupError || !data.user?.email) throw new Error("Couldn't find this team member's email.");
+
+  const { error } = await admin.auth.resetPasswordForEmail(data.user.email, {
+    redirectTo: "https://www.gojli.com/auth/callback?next=/reset-password",
+  });
+  if (error) throw new Error(error.message);
+
+  await logAdminAction({
+    actorId: admin_user.id,
+    actorEmail: admin_user.email,
+    action: "moderator.reset_password",
+    targetType: "user",
+    targetId: userId,
+  });
+}
+
+/** Fetched on demand when the "View activity" modal opens (see
+ *  components/TeamActivityModal.tsx) rather than upfront for every row on
+ *  the team list — most rows' history never gets looked at. Reuses the same
+ *  admin_audit_log entries (targetType "user") that the Users detail page's
+ *  Activity History reads, since every moderator.* action already logs
+ *  against the person's user id. */
+export async function getTeamMemberActivity(userId: string): Promise<AuditEntry[]> {
+  await requireFullAdmin();
+  return getAuditLogForTarget("user", userId);
 }

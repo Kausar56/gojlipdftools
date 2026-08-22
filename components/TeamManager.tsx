@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import toast from "react-hot-toast";
+import type { AuditEntry } from "@/lib/auditLog";
 import {
   MODERATOR_PERMISSIONS,
   MODERATOR_ROLES,
@@ -13,12 +14,22 @@ import {
 import type { ModeratorInfo, SignupUser } from "@/lib/moderators";
 import { describeError } from "@/lib/errorHelpers";
 import { ToolIcon } from "./icons";
+import { TeamActivityModal } from "./TeamActivityModal";
 
 const ROLE_BADGE_CLASS: Record<ModeratorRole, string> = {
   admin: "badge-primary",
+  editor: "badge-accent",
   moderator: "badge-neutral",
   support: "badge-secondary",
 };
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatLastLogin(iso: string | null) {
+  return iso ? new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "Never";
+}
 
 function RolePicker({ role, onChange }: { role: ModeratorRole; onChange: (role: ModeratorRole) => void }) {
   return (
@@ -67,11 +78,7 @@ function PermissionCheckboxes({
   );
 }
 
-function permissionLabel(key: ModeratorPermission) {
-  return MODERATOR_PERMISSIONS.find((permission) => permission.key === key)?.label ?? key;
-}
-
-function AddModeratorModal({
+function AddTeamMemberModal({
   candidateUsers,
   grantAction,
   onClose,
@@ -98,10 +105,10 @@ function AddModeratorModal({
     startTransition(async () => {
       try {
         await grantAction(formData);
-        toast.success(`${selectedUser?.email ?? "Staff member"} added as ${MODERATOR_ROLE_LABELS[role]}.`);
+        toast.success(`${selectedUser?.email ?? "Team member"} added as ${MODERATOR_ROLE_LABELS[role]}.`);
         onClose();
       } catch (error) {
-        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't add this staff member."));
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't add this team member."));
       }
     });
   }
@@ -111,7 +118,7 @@ function AddModeratorModal({
       <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-base-300 bg-base-100 p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="font-semibold text-base-content">Add a staff member</p>
+            <p className="font-semibold text-base-content">Add a team member</p>
             <p className="text-xs text-base-content/60">Search a signed-up user by email, pick a role, then fine-tune access.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="btn btn-ghost btn-xs btn-square">
@@ -182,7 +189,7 @@ function AddModeratorModal({
           </div>
 
           <button type="submit" disabled={!selectedUserId || isPending} className="btn btn-primary btn-sm mt-4 w-full shrink-0">
-            {isPending ? "Granting..." : "Grant Access"}
+            {isPending ? "Adding..." : "Add to Team"}
           </button>
         </form>
       </div>
@@ -190,16 +197,16 @@ function AddModeratorModal({
   );
 }
 
-function EditModeratorRow({
-  moderator,
+function EditRoleRow({
+  member,
   updateAction,
   onDone,
 }: {
-  moderator: ModeratorInfo;
+  member: ModeratorInfo;
   updateAction: (userId: string, formData: FormData) => void | Promise<void>;
   onDone: () => void;
 }) {
-  const [role, setRole] = useState<ModeratorRole>(moderator.role);
+  const [role, setRole] = useState<ModeratorRole>(member.role);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -207,11 +214,11 @@ function EditModeratorRow({
     const formData = new FormData(event.currentTarget);
     startTransition(async () => {
       try {
-        await updateAction(moderator.id, formData);
-        toast.success(`${moderator.email}'s access updated.`);
+        await updateAction(member.id, formData);
+        toast.success(`${member.email}'s access updated.`);
         onDone();
       } catch (error) {
-        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't update this staff member."));
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't update this team member."));
       }
     });
   }
@@ -225,7 +232,7 @@ function EditModeratorRow({
       </div>
       <p className="text-xs font-medium text-base-content/60">Access</p>
       <div className="mt-1">
-        <PermissionCheckboxes defaultChecked={moderator.permissions} />
+        <PermissionCheckboxes defaultChecked={member.permissions} />
       </div>
       <div className="mt-2 flex gap-2">
         <button type="submit" disabled={isPending} className="btn btn-primary btn-xs">
@@ -239,46 +246,116 @@ function EditModeratorRow({
   );
 }
 
-function RemoveStaffButton({
-  moderator,
+function DisableToggleButton({
+  member,
+  disableAction,
+  enableAction,
+}: {
+  member: ModeratorInfo;
+  disableAction: (userId: string) => void | Promise<void>;
+  enableAction: (userId: string) => void | Promise<void>;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleClick() {
+    startTransition(async () => {
+      try {
+        if (member.disabled) {
+          await enableAction(member.id);
+          toast.success(`${member.email}'s admin access re-enabled.`);
+        } else {
+          await disableAction(member.id);
+          toast.success(`${member.email}'s admin access disabled.`);
+        }
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't change access."));
+      }
+    });
+  }
+
+  return (
+    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-primary hover:underline">
+      {member.disabled ? "Enable access" : "Disable access"}
+    </button>
+  );
+}
+
+function ResetPasswordButton({
+  member,
+  resetPasswordAction,
+}: {
+  member: ModeratorInfo;
+  resetPasswordAction: (userId: string) => void | Promise<void>;
+}) {
+  const [isPending, startTransition] = useTransition();
+
+  function handleClick() {
+    if (!window.confirm(`Send a password reset email to ${member.email}?`)) return;
+    startTransition(async () => {
+      try {
+        await resetPasswordAction(member.id);
+        toast.success(`Reset email sent to ${member.email}.`);
+      } catch (error) {
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't send the reset email."));
+      }
+    });
+  }
+
+  return (
+    <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-primary hover:underline">
+      Reset password
+    </button>
+  );
+}
+
+function RemoveMemberButton({
+  member,
   revokeAction,
 }: {
-  moderator: ModeratorInfo;
+  member: ModeratorInfo;
   revokeAction: (userId: string) => void | Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
-    if (!window.confirm(`Remove staff access for ${moderator.email}?`)) return;
+    if (!window.confirm(`Remove ${member.email} from the team? This can't be undone.`)) return;
     startTransition(async () => {
       try {
-        await revokeAction(moderator.id);
-        toast.success(`${moderator.email}'s staff access removed.`);
+        await revokeAction(member.id);
+        toast.success(`${member.email} removed from the team.`);
       } catch (error) {
-        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't remove this staff member."));
+        toast.error(describeError(error, error instanceof Error ? error.message : "Couldn't remove this team member."));
       }
     });
   }
 
   return (
     <button type="button" onClick={handleClick} disabled={isPending} className="text-sm text-error hover:underline">
-      Remove
+      Delete member
     </button>
   );
 }
 
-export function ModeratorsManager({
-  moderators,
+export function TeamManager({
+  members,
   candidateUsers,
   grantAction,
   updateAction,
   revokeAction,
+  disableAction,
+  enableAction,
+  resetPasswordAction,
+  fetchActivity,
 }: {
-  moderators: ModeratorInfo[];
+  members: ModeratorInfo[];
   candidateUsers: SignupUser[];
   grantAction: (formData: FormData) => void | Promise<void>;
   updateAction: (userId: string, formData: FormData) => void | Promise<void>;
   revokeAction: (userId: string) => void | Promise<void>;
+  disableAction: (userId: string) => void | Promise<void>;
+  enableAction: (userId: string) => void | Promise<void>;
+  resetPasswordAction: (userId: string) => void | Promise<void>;
+  fetchActivity: (userId: string) => Promise<AuditEntry[]>;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -286,18 +363,14 @@ export function ModeratorsManager({
   return (
     <div>
       {showAddModal && (
-        <AddModeratorModal
-          candidateUsers={candidateUsers}
-          grantAction={grantAction}
-          onClose={() => setShowAddModal(false)}
-        />
+        <AddTeamMemberModal candidateUsers={candidateUsers} grantAction={grantAction} onClose={() => setShowAddModal(false)} />
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-base-content/80">Current staff</h2>
+        <h2 className="text-sm font-semibold text-base-content/80">Team members</h2>
         <button type="button" onClick={() => setShowAddModal(true)} className="btn btn-primary btn-sm">
           <ToolIcon name="plus" className="h-4 w-4" />
-          Add Staff Member
+          Add Team Member
         </button>
       </div>
 
@@ -305,60 +378,52 @@ export function ModeratorsManager({
         <table className="table">
           <thead>
             <tr>
-              <th>Email</th>
+              <th>Name / Email</th>
               <th>Role</th>
-              <th>Access</th>
+              <th>Status</th>
+              <th>Last login</th>
+              <th>Date added</th>
               <th />
             </tr>
           </thead>
           <tbody>
-            {moderators.length === 0 ? (
+            {members.length === 0 ? (
               <tr>
-                <td colSpan={4} className="text-center text-base-content/50">
-                  No staff members yet.
+                <td colSpan={6} className="text-center text-base-content/50">
+                  No team members yet.
                 </td>
               </tr>
             ) : (
-              moderators.map((moderator) => (
-                <tr key={moderator.id}>
-                  <td className="max-w-40 truncate sm:max-w-none">{moderator.email}</td>
+              members.map((member) => (
+                <tr key={member.id}>
+                  <td className="max-w-48">
+                    {member.fullName && <p className="truncate text-base-content">{member.fullName}</p>}
+                    <p className="truncate text-xs text-base-content/60">{member.email}</p>
+                  </td>
                   <td>
-                    {editingId !== moderator.id && (
-                      <span className={`badge badge-sm ${ROLE_BADGE_CLASS[moderator.role]}`}>
-                        {MODERATOR_ROLE_LABELS[moderator.role]}
-                      </span>
+                    {editingId !== member.id && (
+                      <span className={`badge badge-sm ${ROLE_BADGE_CLASS[member.role]}`}>{MODERATOR_ROLE_LABELS[member.role]}</span>
                     )}
                   </td>
                   <td>
-                    {editingId === moderator.id ? (
-                      <EditModeratorRow
-                        moderator={moderator}
-                        updateAction={updateAction}
-                        onDone={() => setEditingId(null)}
-                      />
-                    ) : moderator.permissions.length === 0 ? (
-                      <span className="text-xs text-base-content/40">No permissions granted</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {moderator.permissions.map((permission) => (
-                          <span key={permission} className="badge badge-neutral badge-sm">
-                            {permissionLabel(permission)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <span className={`badge badge-sm ${member.disabled ? "badge-error" : "badge-ghost"}`}>
+                      {member.disabled ? "Disabled" : "Active"}
+                    </span>
                   </td>
+                  <td className="whitespace-nowrap text-sm text-base-content/70">{formatLastLogin(member.lastSignInAt)}</td>
+                  <td className="whitespace-nowrap text-sm text-base-content/70">{formatDate(member.createdAt)}</td>
                   <td className="text-right">
-                    {editingId !== moderator.id && (
-                      <div className="flex items-center justify-end gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(moderator.id)}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Edit
+                    {editingId === member.id ? (
+                      <EditRoleRow member={member} updateAction={updateAction} onDone={() => setEditingId(null)} />
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                        <button type="button" onClick={() => setEditingId(member.id)} className="text-sm text-primary hover:underline">
+                          Edit role
                         </button>
-                        <RemoveStaffButton moderator={moderator} revokeAction={revokeAction} />
+                        <DisableToggleButton member={member} disableAction={disableAction} enableAction={enableAction} />
+                        <ResetPasswordButton member={member} resetPasswordAction={resetPasswordAction} />
+                        <TeamActivityModal memberId={member.id} memberEmail={member.email} fetchActivity={fetchActivity} />
+                        <RemoveMemberButton member={member} revokeAction={revokeAction} />
                       </div>
                     )}
                   </td>

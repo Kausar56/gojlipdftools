@@ -23,11 +23,13 @@ export function DashboardContent({
   plan,
   monthlyUsed,
   monthlyLimit,
+  isBanned,
 }: {
   user: User;
   plan: PlanId;
   monthlyUsed: number;
   monthlyLimit: number | null;
+  isBanned: boolean;
 }) {
   const router = useRouter();
   const [recentTools, setRecentTools] = useState<Tool[] | null>(null);
@@ -84,69 +86,87 @@ export function DashboardContent({
         </div>
       </div>
 
-      <section className="mt-6 card border border-base-300 bg-base-100 p-5">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-medium text-base-content">Office conversions this month</span>
-          <span className="text-base-content/60">
-            {monthlyUsed} {monthlyLimit === null ? "used" : `/ ${monthlyLimit} used`}
-          </span>
-        </div>
-        {monthlyLimit !== null && (
-          <progress
-            className="progress progress-primary mt-2 w-full"
-            value={Math.min(monthlyUsed, monthlyLimit)}
-            max={monthlyLimit}
-          />
-        )}
-        <p className="mt-2 text-xs text-base-content/50">
-          Covers PDF ↔ Word/Excel/PowerPoint conversions, which run on a third-party server.
-          Browser-only tools (merge, split, compress, etc.) are always unlimited.
-        </p>
-      </section>
-
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold text-base-content">Quick actions</h2>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {quickTools.map((tool) => (
-            <Link
-              key={tool.slug}
-              href={`/${tool.slug}`}
-              className="card border border-base-300 bg-base-100 p-4 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
-            >
-              <ToolIcon name={tool.icon} className="h-5 w-5 text-primary" />
-              <p className="mt-2 text-sm font-medium text-base-content">{tool.name}</p>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold text-base-content">Recently used tools</h2>
-        {recentTools === null ? null : recentTools.length === 0 ? (
-          <p className="mt-4 rounded-lg border border-dashed border-base-300 px-4 py-6 text-center text-sm text-base-content/60">
-            You haven't used any tools yet — pick one above to get started.
+      {isBanned ? (
+        <section className="mt-6 card border border-error/30 bg-error/10 p-5">
+          <p className="font-semibold text-error">Your account has been suspended.</p>
+          <p className="mt-1 text-sm text-error/80">
+            You can still view your dashboard and message support, but tools are unavailable while your account is
+            suspended. Please contact support if you think this is a mistake.
           </p>
-        ) : (
-          <ul className="mt-4 divide-y divide-base-300 rounded-lg border border-base-300 bg-base-100">
-            {recentTools.map((tool) => (
-              <li key={tool.slug}>
+        </section>
+      ) : (
+        <section className="mt-6 card border border-base-300 bg-base-100 p-5">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium text-base-content">Office conversions this month</span>
+            <span className="text-base-content/60">
+              {monthlyUsed} {monthlyLimit === null ? "used" : `/ ${monthlyLimit} used`}
+            </span>
+          </div>
+          {monthlyLimit !== null && (
+            <progress
+              className="progress progress-primary mt-2 w-full"
+              value={Math.min(monthlyUsed, monthlyLimit)}
+              max={monthlyLimit}
+            />
+          )}
+          <p className="mt-2 text-xs text-base-content/50">
+            Covers PDF ↔ Word/Excel/PowerPoint conversions, which run on a third-party server.
+            Browser-only tools (merge, split, compress, etc.) are always unlimited.
+          </p>
+        </section>
+      )}
+
+      {!isBanned && (
+        <>
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold text-base-content">Quick actions</h2>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {quickTools.map((tool) => (
                 <Link
+                  key={tool.slug}
                   href={`/${tool.slug}`}
-                  className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-base-200"
+                  className="card border border-base-300 bg-base-100 p-4 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
                 >
-                  <ToolIcon name={tool.icon} className="h-4 w-4 text-primary" />
-                  <span className="text-base-content">{tool.name}</span>
+                  <ToolIcon name={tool.icon} className="h-5 w-5 text-primary" />
+                  <p className="mt-2 text-sm font-medium text-base-content">{tool.name}</p>
                 </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-10">
+            <h2 className="text-lg font-semibold text-base-content">Recently used tools</h2>
+            {recentTools === null ? null : recentTools.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-base-300 px-4 py-6 text-center text-sm text-base-content/60">
+                You haven't used any tools yet — pick one above to get started.
+              </p>
+            ) : (
+              <ul className="mt-4 divide-y divide-base-300 rounded-lg border border-base-300 bg-base-100">
+                {recentTools.map((tool) => (
+                  <li key={tool.slug}>
+                    <Link
+                      href={`/${tool.slug}`}
+                      className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-base-200"
+                    >
+                      <ToolIcon name={tool.icon} className="h-4 w-4 text-primary" />
+                      <span className="text-base-content">{tool.name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-base-content">Need help?</h2>
         <div className="mt-4 card flex flex-col gap-3 border border-base-300 bg-base-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-base-content/70">Open a support ticket and our team will get back to you.</p>
+          <p className="text-sm text-base-content/70">
+            {isBanned
+              ? "Think your account was suspended by mistake? Open a ticket and our team will look into it."
+              : "Open a support ticket and our team will get back to you."}
+          </p>
           <Link href="/dashboard/tickets" className="btn btn-primary btn-sm shrink-0">
             Create Ticket
           </Link>

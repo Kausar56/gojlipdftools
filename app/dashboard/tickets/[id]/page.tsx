@@ -45,6 +45,7 @@ export default async function UserTicketDetailPage({ params }: { params: Promise
           messages={displayMessages}
           viewerRole="user"
           status={ticket.status}
+          locked={ticket.locked}
           replyAction={replyToTicketAsUser.bind(null, id)}
           reopenAction={reopenTicketAsUser.bind(null, id)}
         />

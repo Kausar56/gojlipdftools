@@ -8,10 +8,6 @@ import type { PlanId } from "@/lib/planLimits";
 
 const VALID_PLANS: PlanId[] = ["free", "pro", "business"];
 
-// A permanent-enough ban: Supabase's admin API takes a duration string, not
-// a boolean, so "banned" here means "for the next ~100 years."
-const BAN_DURATION = "876000h";
-
 // A real admin always qualifies (hasPermission's built-in bypass); a
 // moderator/staff member needs "users:manage" granted explicitly — plain
 // "users:view" only gets the read-only list, enforced again here since the
@@ -24,6 +20,17 @@ async function requireUserManagement() {
 
 function assertNotSelf(actorId: string, targetUserId: string) {
   if (actorId === targetUserId) throw new Error("You can't do this to your own account.");
+}
+
+// Merges rather than replaces app_metadata — Supabase also stores its own
+// fields there for OAuth accounts (e.g. `provider`/`providers`), and the
+// admin API's updateUserById does not merge on its own, so replacing
+// app_metadata wholesale would silently wipe those out.
+async function setBannedFlag(admin: ReturnType<typeof createAdminClient>, userId: string, banned: boolean) {
+  const { data } = await admin.auth.admin.getUserById(userId);
+  const appMetadata = { ...(data.user?.app_metadata ?? {}), banned };
+  const { error } = await admin.auth.admin.updateUserById(userId, { app_metadata: appMetadata });
+  if (error) throw new Error(error.message);
 }
 
 export async function updateUserPlan(userId: string, formData: FormData) {
@@ -47,13 +54,20 @@ export async function updateUserPlan(userId: string, formData: FormData) {
   revalidatePath("/admin/users");
 }
 
+// An app_metadata flag rather than Supabase's native ban_duration: a native
+// ban rejects sign-in and session refresh outright at the Auth-provider
+// level, which would eventually log a banned user out entirely (as soon as
+// their access token needs refreshing) — the opposite of what's wanted here.
+// A banned user should still be able to log in and reach their dashboard
+// (to see why, and to message support about it — see DashboardContent.tsx
+// and app/dashboard/tickets); only *tool* pages are blocked, enforced in
+// proxy.ts by reading this same flag off the verified user record.
 export async function banUser(userId: string) {
   const actor = await requireUserManagement();
   assertNotSelf(actor.id, userId);
 
   const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: BAN_DURATION });
-  if (error) throw new Error(error.message);
+  await setBannedFlag(admin, userId, true);
 
   await logAdminAction({ actorId: actor.id, actorEmail: actor.email, action: "user.ban", targetType: "user", targetId: userId });
 
@@ -64,8 +78,7 @@ export async function unbanUser(userId: string) {
   const actor = await requireUserManagement();
 
   const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(userId, { ban_duration: "none" });
-  if (error) throw new Error(error.message);
+  await setBannedFlag(admin, userId, false);
 
   await logAdminAction({ actorId: actor.id, actorEmail: actor.email, action: "user.unban", targetType: "user", targetId: userId });
 

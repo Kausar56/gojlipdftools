@@ -21,6 +21,7 @@ import { TicketCategorySelect } from "@/components/TicketCategorySelect";
 import { TicketPrioritySelect } from "@/components/TicketPrioritySelect";
 import { TicketNotesButton } from "@/components/TicketNotesButton";
 import { TicketActivityHistory } from "@/components/TicketActivityHistory";
+import { TicketLockButton } from "@/components/TicketLockButton";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   replyToTicketAsStaff,
@@ -29,6 +30,8 @@ import {
   updateTicketPriority,
   assignTicket,
   addInternalNote,
+  lockTicket,
+  unlockTicket,
 } from "../actions";
 
 export const metadata: Metadata = { title: "Ticket" };
@@ -85,6 +88,7 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
               <span className={`badge badge-sm ${TICKET_STATUS_BADGE_CLASS[ticket.status]}`}>
                 {TICKET_STATUS_LABELS[ticket.status]}
               </span>
+              {ticket.locked && <span className="badge badge-sm badge-neutral">🔒 Permanently Closed</span>}
             </div>
             <h1 className="mt-1 truncate text-xl font-semibold text-base-content">{ticket.subject}</h1>
             <p className="truncate text-xs text-base-content/50">
@@ -133,6 +137,21 @@ export default async function AdminTicketDetailPage({ params }: { params: Promis
         <ControlField label="Status">
           <TicketStatusSelect status={ticket.status} updateAction={updateTicketStatus.bind(null, id)} />
         </ControlField>
+
+        {/* Locking is a separate, admin-only escalation on top of "Closed" —
+            see app/admin/tickets/actions.ts's lockTicket. */}
+        {fullAccess && (
+          <>
+            <VerticalDivider />
+            <ControlField label="Reopening">
+              <TicketLockButton
+                locked={ticket.locked}
+                lockAction={lockTicket.bind(null, id)}
+                unlockAction={unlockTicket.bind(null, id)}
+              />
+            </ControlField>
+          </>
+        )}
       </div>
 
       {/* Chat + activity */}
