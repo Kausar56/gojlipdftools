@@ -219,14 +219,27 @@ export function WatermarkPdfWorkspace() {
         const fontSize = fontSizeOverride ?? computeAutoFontSize(text, font, width, height);
         const textWidth = font.widthOfTextAtSize(text, fontSize);
         // positionPct's origin is top-left (matching the on-screen preview);
-        // PDF coordinates are bottom-left, so the y fraction is flipped. Both
-        // offsets center the text on the chosen point rather than starting
-        // its baseline there, so it lands where the preview shows it.
+        // PDF coordinates are bottom-left, so the y fraction is flipped.
         const anchorX = positionPct.x * width;
         const anchorY = height - positionPct.y * height;
+        // pdf-lib's `rotate` spins the text around the (x, y) point passed to
+        // drawText, not around the text's visual center — the preview's CSS
+        // `transform: rotate(...)` rotates around the element's own center
+        // by default, so at any rotation other than 0° the two disagreed
+        // (the longer the text, the bigger the visible drift, since the
+        // baseline-to-center offset being rotated scales with textWidth).
+        // This solves for the baseline-start point whose *rotated* center —
+        // (textWidth/2, fontSize/2) in the text's own local frame — lands
+        // exactly on the clicked anchor point, matching the preview at every
+        // angle instead of only at 0°.
+        const angleRad = (rotation * Math.PI) / 180;
+        const cos = Math.cos(angleRad);
+        const sin = Math.sin(angleRad);
+        const dx = textWidth / 2;
+        const dy = fontSize / 2;
         page.drawText(text, {
-          x: anchorX - textWidth / 2,
-          y: anchorY - fontSize / 2,
+          x: anchorX - (dx * cos - dy * sin),
+          y: anchorY - (dx * sin + dy * cos),
           size: fontSize,
           font,
           color: rgb(r, g, b),
