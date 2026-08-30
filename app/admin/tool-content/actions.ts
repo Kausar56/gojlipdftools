@@ -2,9 +2,10 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { getCurrentViewerAccess, hasPermission } from "@/lib/adminAuth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { logAdminAction } from "@/lib/auditLog";
 import { sanitizeRichTextHtml } from "@/lib/sanitizeRichText";
-import { setToolContentOverride, resetToolContentOverride, type ToolContentOverride } from "@/lib/toolContent";
+import { setToolContentOverride, resetToolContentOverride, type ToolContentOverride, type ToolFaqOverride } from "@/lib/toolContent";
 import { getToolBySlug } from "@/lib/tools";
 
 // Global, cross-visitor content shown on the public tool page — a real
@@ -50,6 +51,47 @@ export async function updateToolContent(slug: string, formData: FormData) {
   updateTag("tool-content");
   revalidatePath(`/${slug}`);
   revalidatePath(`/admin/tool-content/${slug}`);
+}
+
+/** Same one-time cleanup as app/admin/blog/actions.ts's
+ *  cleanupNonBreakingSpaces, for tool guide/FAQ overrides instead of blog
+ *  posts — see that function's comment for why this exists. Only tools with
+ *  a saved override are checked; a tool still showing its lib/tools.ts
+ *  default has hand-written copy, never pasted, so it was never at risk. */
+export async function cleanupToolContentWhitespace(): Promise<{ fixed: number; checked: number }> {
+  const { access } = await getCurrentViewerAccess();
+  if (access.kind !== "admin") throw new Error("Not authorized.");
+
+  const admin = createAdminClient();
+  const { data: rows, error } = await admin.from("tool_content").select("slug, guide_html, faqs");
+  if (error) throw new Error(error.message);
+
+  let fixed = 0;
+  for (const row of rows ?? []) {
+    const originalGuideHtml = (row.guide_html as string | null) ?? null;
+    const cleanedGuideHtml = originalGuideHtml ? sanitizeRichTextHtml(originalGuideHtml) : originalGuideHtml;
+
+    const originalFaqs = (row.faqs as ToolFaqOverride[] | null) ?? null;
+    const cleanedFaqs = originalFaqs
+      ? originalFaqs.map((faq) => ({ ...faq, answerHtml: sanitizeRichTextHtml(faq.answerHtml) }))
+      : originalFaqs;
+
+    const guideChanged = cleanedGuideHtml !== originalGuideHtml;
+    const faqsChanged = JSON.stringify(cleanedFaqs) !== JSON.stringify(originalFaqs);
+    if (!guideChanged && !faqsChanged) continue;
+
+    const { error: updateError } = await admin
+      .from("tool_content")
+      .update({ guide_html: cleanedGuideHtml, faqs: cleanedFaqs })
+      .eq("slug", row.slug as string);
+    if (updateError) throw new Error(updateError.message);
+    fixed++;
+    updateTag(`tool-content:${row.slug}`);
+  }
+
+  if (fixed > 0) updateTag("tool-content");
+
+  return { fixed, checked: (rows ?? []).length };
 }
 
 export async function resetToolContent(slug: string) {

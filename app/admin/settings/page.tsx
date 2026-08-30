@@ -5,7 +5,10 @@ import { getBannerSettings, getToolStatusMap } from "@/lib/appSettings";
 import { tools } from "@/lib/tools";
 import { BannerEditor } from "@/components/BannerEditor";
 import { ToolStatusManager } from "@/components/ToolStatusManager";
+import { ContentCleanupPanel } from "@/components/ContentCleanupPanel";
 import { updateBanner, updateToolStatus } from "./actions";
+import { cleanupNonBreakingSpaces } from "../blog/actions";
+import { cleanupToolContentWhitespace } from "../tool-content/actions";
 
 export const metadata: Metadata = { title: "Settings" };
 export const dynamic = "force-dynamic";
@@ -40,6 +43,13 @@ export default async function AdminSettingsPage() {
         </p>
         <div className="mt-2">
           <ToolStatusManager tools={tools} statusMap={statusMap} action={updateToolStatus} />
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold text-base-content/80">Content cleanup</h2>
+        <div className="mt-2">
+          <ContentCleanupPanel cleanupBlogAction={cleanupNonBreakingSpaces} cleanupToolContentAction={cleanupToolContentWhitespace} />
         </div>
       </div>
     </div>

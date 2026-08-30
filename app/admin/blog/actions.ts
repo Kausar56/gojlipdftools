@@ -237,3 +237,44 @@ export async function deletePost(id: string) {
   revalidatePath("/blog");
   redirect("/admin/blog");
 }
+
+/** One-time cleanup for posts saved before sanitizeRichTextHtml started
+ *  normalizing non-breaking spaces (see lib/sanitizeRichText.ts) — content
+ *  pasted from Word/Google Docs/an AI tool often has every space encoded as
+ *  U+00A0, which a browser never wraps a line at, so the paragraph overflows
+ *  its column instead of wrapping. Re-running every post's stored HTML
+ *  through the now-fixed sanitizer is the same fix opening the post and
+ *  clicking Save would apply, just for every post at once instead of one at
+ *  a time — and only actually writes the ones that changed, so it doesn't
+ *  bump updated_at (and this post's sitemap lastmod) for posts that were
+ *  already clean. */
+export async function cleanupNonBreakingSpaces(): Promise<{ fixed: number; checked: number }> {
+  const { user, access } = await requireViewer();
+  if (access.kind !== "admin") throw new Error("Not authorized.");
+
+  const admin = createAdminClient();
+  const { data: posts, error } = await admin.from("blog_posts").select("id, content_html");
+  if (error) throw new Error(error.message);
+
+  let fixed = 0;
+  for (const post of posts ?? []) {
+    const original = post.content_html as string;
+    const cleaned = sanitizeRichTextHtml(original);
+    if (cleaned === original) continue;
+    const { error: updateError } = await admin.from("blog_posts").update({ content_html: cleaned }).eq("id", post.id);
+    if (updateError) throw new Error(updateError.message);
+    fixed++;
+  }
+
+  if (fixed > 0) {
+    await logAdminAction({
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "blog.cleanup_whitespace",
+      details: { fixed, checked: (posts ?? []).length },
+    });
+    revalidatePath("/blog");
+  }
+
+  return { fixed, checked: (posts ?? []).length };
+}
