@@ -8,6 +8,8 @@ import { getToolStatusMap } from "@/lib/appSettings";
 import { getEffectiveToolContent } from "@/lib/toolContent";
 import type { Tool } from "@/lib/tools";
 
+const SITE_URL = "https://www.gojli.com";
+
 // The one place all ~44 tool pages route through (every app/<slug>/page.tsx
 // is a thin `<ToolPageLayout tool={tool} workspace={<XWorkspace/>} />`
 // wrapper) — checking the admin-set disabled flag here applies it to every
@@ -23,9 +25,53 @@ export async function ToolPageLayout({
 }) {
   const [toolStatusMap, content] = await Promise.all([getToolStatusMap(), getEffectiveToolContent(tool)]);
   const toolStatus = toolStatusMap[tool.slug];
+  const toolUrl = `${SITE_URL}/${tool.slug}`;
+
+  // content.guideSteps is null once an admin has replaced the guide with
+  // their own free-form article (see lib/toolContent.ts) — the HowTo block
+  // is skipped rather than describing steps that no longer match what's on
+  // the page.
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+          { "@type": "ListItem", position: 2, name: tool.name, item: toolUrl },
+        ],
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: tool.name,
+        description: tool.heroDescription,
+        url: toolUrl,
+        applicationCategory: "UtilitiesApplication",
+        operatingSystem: "Any (runs in any modern web browser)",
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      },
+      ...(content.guideSteps && content.guideSteps.length > 0
+        ? [
+            {
+              "@type": "HowTo",
+              name: `How to Use ${tool.name}`,
+              description: tool.heroDescription,
+              step: content.guideSteps.map((step, index) => ({
+                "@type": "HowToStep",
+                position: index + 1,
+                name: step.title,
+                text: step.description,
+                ...(step.imageSrc ? { image: `${SITE_URL}${step.imageSrc}` } : {}),
+              })),
+            },
+          ]
+        : []),
+    ],
+  };
 
   return (
     <div>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <RecentToolTracker slug={tool.slug} />
 
       <section className="relative overflow-hidden">

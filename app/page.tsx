@@ -4,9 +4,36 @@ import { WhyChooseUs } from "@/components/WhyChooseUs";
 import { ToolGrid } from "@/components/ToolGrid";
 import { tools } from "@/lib/tools";
 
+const SITE_URL = "https://www.gojli.com";
+
+// Organization + WebSite structured data — every other page here has its
+// own JSON-LD (blog posts, tool pages), but the site's own top-level entity
+// had none. No `potentialAction` (sitelinks search box) since there's no
+// actual on-site search to point it at — a broken/fake one would be worse
+// than none.
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      name: "Gojli",
+      url: SITE_URL,
+      logo: `${SITE_URL}/logo.png`,
+      description:
+        "Free, browser-based PDF tools to merge, split, compress, and convert PDF files online. No installation required.",
+    },
+    {
+      "@type": "WebSite",
+      name: "Gojli",
+      url: SITE_URL,
+    },
+  ],
+};
+
 export default function Home() {
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <Hero />
 
       <section id="tools" className="relative overflow-hidden bg-base-200 pt-16 pb-24">

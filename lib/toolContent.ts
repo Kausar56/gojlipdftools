@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "./supabase/admin";
-import type { Tool } from "./tools";
+import type { Tool, ToolGuideStep } from "./tools";
 
 export type ToolFaqOverride = { question: string; answerHtml: string };
 
@@ -14,6 +14,14 @@ export type EffectiveToolContent = {
   guideTitle: string;
   guideHtml: string;
   faqs: ToolFaqOverride[];
+  // lib/tools.ts's guideSteps when the guide is still the default synthesized
+  // one; null once an admin has written their own free-form guide_html,
+  // since that replaces the steps entirely and they'd no longer describe
+  // what's actually on the page. Used for this tool's HowTo structured data
+  // (see components/ToolPageLayout.tsx) — structured data that doesn't match
+  // the visible content is a real risk (Google treats it as spam), so this
+  // is the one place that decides whether the steps are still trustworthy.
+  guideSteps: ToolGuideStep[] | null;
 };
 
 function escapeHtml(text: string): string {
@@ -112,6 +120,7 @@ export async function getEffectiveToolContent(tool: Tool): Promise<EffectiveTool
       override?.faqs && override.faqs.length > 0
         ? override.faqs
         : tool.faqs.map((faq) => ({ question: faq.question, answerHtml: `<p>${escapeHtml(faq.answer)}</p>` })),
+    guideSteps: override?.guideHtml ? null : tool.guideSteps,
   };
 }
 
@@ -119,6 +128,24 @@ export async function getEffectiveToolContent(tool: Tool): Promise<EffectiveTool
  *  public tool pages) so it never shows stale content right after a save. */
 export async function getToolContentOverrideForEdit(slug: string): Promise<ToolContentOverride | null> {
   return readToolContentOverrideFresh(slug);
+}
+
+/** Every tool that has a custom guide/FAQ override, and when it was last
+ *  actually edited — used by app/sitemap.ts so a tool's <lastmod> reflects a
+ *  real content change instead of just "whenever the site was last built".
+ *  A tool with no row here still shows its lib/tools.ts default copy, so its
+ *  sitemap entry falls back to a fixed baseline date instead (see
+ *  DEFAULT_CONTENT_DATE in app/sitemap.ts). */
+export async function getAllToolContentUpdatedAt(): Promise<Map<string, string>> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.from("tool_content").select("slug, updated_at");
+    return new Map((data ?? []).map((row) => [row.slug as string, row.updated_at as string]));
+  } catch {
+    // Table not created yet or Supabase env vars missing — the sitemap
+    // still needs to build, just without any per-tool override dates.
+    return new Map();
+  }
 }
 
 export async function setToolContentOverride(slug: string, content: ToolContentOverride): Promise<void> {
