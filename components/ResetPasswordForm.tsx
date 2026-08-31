@@ -3,17 +3,25 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { PasswordField } from "./PasswordField";
 
 export function ResetPasswordForm() {
   const router = useRouter();
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "done">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setStatus("submitting");
     setErrorMessage("");
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords don't match.");
+      return;
+    }
+
+    setStatus("submitting");
 
     try {
       const supabase = createClient();
@@ -46,18 +54,24 @@ export function ResetPasswordForm() {
       <p className="mt-1 text-sm text-base-content/60">Enter a new password for your account.</p>
 
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3">
-        <label className="block text-sm font-medium text-base-content">
-          New password
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters"
-            className="input input-bordered mt-1.5 w-full"
-          />
-        </label>
+        <PasswordField
+          label="New password"
+          value={password}
+          onChange={setPassword}
+          placeholder="At least 6 characters"
+          autoComplete="new-password"
+          minLength={6}
+          showStrength
+        />
+
+        <PasswordField
+          label="Confirm new password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          placeholder="Re-enter your new password"
+          autoComplete="new-password"
+          minLength={6}
+        />
 
         {errorMessage && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>}
 

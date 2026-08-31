@@ -4,7 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthRedirectOrigin } from "@/lib/authRedirect";
 import { GoogleIcon } from "./GoogleIcon";
+import { PasswordField } from "./PasswordField";
+
+// Supabase deliberately returns the same generic error for a wrong password
+// and for an email with no account, so this can't say which one is off
+// without a separate lookup — this just makes the wording clearer than
+// Supabase's raw "Invalid login credentials".
+function describeLoginError(message: string): string {
+  return /invalid login credentials/i.test(message) ? "Incorrect email or password. Please try again." : message;
+}
 
 export function LoginForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
@@ -20,7 +30,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          redirectTo: `${getAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
         },
       });
       if (error) setErrorMessage(error.message);
@@ -38,7 +48,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setErrorMessage(error.message);
+        setErrorMessage(describeLoginError(error.message));
         setStatus("idle");
         return;
       }
@@ -79,22 +89,18 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
           />
         </label>
 
-        <label className="block text-sm font-medium text-base-content">
-          <span className="flex items-center justify-between">
-            Password
+        <PasswordField
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          placeholder="••••••••"
+          autoComplete="current-password"
+          extraLabel={
             <Link href="/forgot-password" className="text-xs font-normal text-primary hover:underline">
               Forgot password?
             </Link>
-          </span>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="••••••••"
-            className="input input-bordered mt-1.5 w-full"
-          />
-        </label>
+          }
+        />
 
         {errorMessage && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>}
 

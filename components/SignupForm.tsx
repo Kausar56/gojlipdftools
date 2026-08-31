@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthRedirectOrigin } from "@/lib/authRedirect";
 import { GoogleIcon } from "./GoogleIcon";
+import { PasswordField } from "./PasswordField";
 
 export function SignupForm({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "check-email">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -21,7 +24,7 @@ export function SignupForm({ redirectTo }: { redirectTo: string }) {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          redirectTo: `${getAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
         },
       });
       if (error) setErrorMessage(error.message);
@@ -32,8 +35,14 @@ export function SignupForm({ redirectTo }: { redirectTo: string }) {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setStatus("submitting");
     setErrorMessage("");
+
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords don't match.");
+      return;
+    }
+
+    setStatus("submitting");
 
     try {
       const supabase = createClient();
@@ -42,7 +51,7 @@ export function SignupForm({ redirectTo }: { redirectTo: string }) {
         password,
         options: {
           data: { full_name: name },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+          emailRedirectTo: `${getAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
         },
       });
 
@@ -119,18 +128,24 @@ export function SignupForm({ redirectTo }: { redirectTo: string }) {
           />
         </label>
 
-        <label className="block text-sm font-medium text-base-content">
-          Password
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="At least 6 characters"
-            className="input input-bordered mt-1.5 w-full"
-          />
-        </label>
+        <PasswordField
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          placeholder="At least 6 characters"
+          autoComplete="new-password"
+          minLength={6}
+          showStrength
+        />
+
+        <PasswordField
+          label="Confirm password"
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+          placeholder="Re-enter your password"
+          autoComplete="new-password"
+          minLength={6}
+        />
 
         {errorMessage && <p className="rounded-lg bg-error/10 px-3 py-2 text-sm text-error">{errorMessage}</p>}
 

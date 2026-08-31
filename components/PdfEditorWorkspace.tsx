@@ -269,6 +269,24 @@ async function renderAndDetectPage(
   return detectTextItems(page, ctx, baseViewport.height, OFFSCREEN_RENDER_SCALE);
 }
 
+/** Reads a File's bytes for pdf-lib, with a clear error instead of pdf-lib's
+ *  own confusing one if this ever comes back unusable. pdf-lib reports any
+ *  value passed to PDFDocument.load() that isn't a string/Uint8Array/
+ *  ArrayBuffer as `` `pdf` must be of type ... but was actually of type `NaN` ``
+ *  regardless of what the value actually was — its own type-detection helper
+ *  calls the global isNaN(), which coerces nearly any non-primitive value to
+ *  NaN, so the real value (a File, an empty object, whatever) never shows up
+ *  in the message. Guarding here at least surfaces something actionable if
+ *  file.arrayBuffer() (which should always resolve to a real ArrayBuffer for
+ *  a genuine File) ever doesn't. */
+async function readPdfBytes(file: File): Promise<ArrayBuffer> {
+  const bytes = await file.arrayBuffer();
+  if (!(bytes instanceof ArrayBuffer) || bytes.byteLength === 0) {
+    throw new Error("Couldn't read this file — try re-selecting it and saving again.");
+  }
+  return bytes;
+}
+
 /** Scans every page's AcroForm widget annotations for text fields already
  *  present in the uploaded PDF (built in Acrobat, Google Forms exports, form
  *  templates, etc.) and turns each into an editable form-text overlay —
@@ -1503,7 +1521,7 @@ export function PdfEditorWorkspace() {
     setPageOpBusy(true);
     try {
       const { PDFDocument } = await import("pdf-lib");
-      const bytes = await file.arrayBuffer();
+      const bytes = await readPdfBytes(file);
       const doc = await PDFDocument.load(bytes);
       doc.removePage(currentPage);
       const newPageCount = doc.getPageCount();
@@ -1527,7 +1545,7 @@ export function PdfEditorWorkspace() {
     setPageOpBusy(true);
     try {
       const { PDFDocument, degrees } = await import("pdf-lib");
-      const bytes = await file.arrayBuffer();
+      const bytes = await readPdfBytes(file);
       const doc = await PDFDocument.load(bytes);
       const page = doc.getPage(currentPage);
       const nextAngle = ((page.getRotation().angle + deltaDeg) % 360 + 360) % 360;
@@ -1544,7 +1562,7 @@ export function PdfEditorWorkspace() {
     setPageOpBusy(true);
     try {
       const { PDFDocument } = await import("pdf-lib");
-      const bytes = await file.arrayBuffer();
+      const bytes = await readPdfBytes(file);
       const doc = await PDFDocument.load(bytes);
       const { width, height } = doc.getPage(currentPage).getSize();
       doc.insertPage(currentPage + 1, [width, height]);
@@ -1560,13 +1578,16 @@ export function PdfEditorWorkspace() {
   }
 
   async function handleSave() {
-    if (!file) return;
+    // The floating and filename-bar Save buttons both call this, and both
+    // only disable via `status === "saving"` — a re-render lagging one tick
+    // behind a rapid double-click could otherwise let two saves overlap.
+    if (!file || status === "saving") return;
     setStatus("saving");
     setErrorMessage("");
 
     try {
       const { PDFDocument, StandardFonts, rgb, PDFName, PDFString, TextAlignment, degrees } = await import("pdf-lib");
-      const bytes = await file.arrayBuffer();
+      const bytes = await readPdfBytes(file);
       const doc = await PDFDocument.load(bytes);
       const font = await doc.embedFont(StandardFonts.Helvetica);
       // Standard (built-in, no file to fetch) fonts — cheap to embed all 12

@@ -3,10 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthRedirectOrigin } from "@/lib/authRedirect";
+import { checkEmailHasAccount } from "@/app/forgot-password/actions";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "sent">("idle");
+  const [status, setStatus] = useState<"idle" | "submitting" | "sent" | "not_found">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   async function handleSubmit(event: React.FormEvent) {
@@ -15,9 +17,15 @@ export function ForgotPasswordForm() {
     setErrorMessage("");
 
     try {
+      const hasAccount = await checkEmailHasAccount(email);
+      if (!hasAccount) {
+        setStatus("not_found");
+        return;
+      }
+
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+        redirectTo: `${getAuthRedirectOrigin()}/auth/callback?next=/reset-password`,
       });
       if (error) {
         setErrorMessage(error.message);
@@ -29,6 +37,27 @@ export function ForgotPasswordForm() {
       setErrorMessage(error instanceof Error ? error.message : "Couldn't send the reset link right now.");
       setStatus("idle");
     }
+  }
+
+  if (status === "not_found") {
+    return (
+      <div className="card border border-base-300 bg-base-100 p-8 text-center shadow-sm">
+        <h1 className="text-2xl font-semibold text-base-content">Account Not Found</h1>
+        <p className="mt-2 text-sm text-base-content/60">
+          No Gojli account exists for <span className="font-medium text-base-content">{email}</span>.
+        </p>
+        <Link href="/signup" className="btn btn-primary mt-6">
+          Create New Account
+        </Link>
+        <button
+          type="button"
+          onClick={() => setStatus("idle")}
+          className="mt-3 text-sm font-medium text-primary hover:underline"
+        >
+          Try a different email
+        </button>
+      </div>
+    );
   }
 
   if (status === "sent") {
