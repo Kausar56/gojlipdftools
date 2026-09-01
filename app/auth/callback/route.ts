@@ -3,15 +3,19 @@ import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, welcomeEmail } from "@/lib/email";
+import { getServerAuthOrigin } from "@/lib/authRedirect";
 
 /**
  * Lands here after Google OAuth and email confirmation/reset links.
  * Exchanges the one-time `code` for a real session, then redirects onward.
  */
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+  // Never build the outgoing redirect from request.url's own origin — see
+  // getServerAuthOrigin's doc comment for why that can be 0.0.0.0 here.
+  const origin = getServerAuthOrigin(request);
 
   if (code) {
     const supabase = await createClient();
