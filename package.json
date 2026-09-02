@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/sync-pdf-worker.mjs"
   },
   "dependencies": {
     "@pdfsmaller/pdf-decrypt": "^1.0.1",
@@ -24,6 +25,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hot-toast": "^2.6.0",
+    "react-markdown": "^10.1.0",
     "react-quill-new": "^3.8.3",
     "sanitize-html": "^2.17.6",
     "tesseract.js": "^7.0.0"
@@ -40,5 +42,9 @@
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "browserslist": "^4.28.7",
+    "postcss": "^8.5.12"
   }
 }

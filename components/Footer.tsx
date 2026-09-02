@@ -7,6 +7,10 @@ import { tools, type Tool } from "@/lib/tools";
 // here is also the display order within each column.
 const FOOTER_GROUPS: { title: string; slugs: string[] }[] = [
   {
+    title: "AI Tools",
+    slugs: ["ai-summarize"],
+  },
+  {
     title: "Organize PDF",
     slugs: [
       "merge-pdf",

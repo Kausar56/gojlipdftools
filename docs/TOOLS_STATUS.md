@@ -34,8 +34,9 @@ Keep it updated whenever a tool's status changes.
 | PPT to PDF | `ppt-to-pdf` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
 | PDF to Excel | `pdf-to-excel` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
 | PDF to PowerPoint | `pdf-to-ppt` | 🔑 Wired, pending API key | CloudConvert (3rd-party) | direct browser→CloudConvert upload |
+| AI Summarize | `ai-summarize` | 🔑 Wired, pending API key | Browser (pdf.js text extraction) + OpenRouter (3rd-party) | pdf.js in-browser extraction → `/api/ai-summarize` → OpenRouter chat completions; requires login, monthly quota in `lib/aiConfig.ts` |
 
-**9 live, 6 wired pending API key**, out of 15 tools listed here (this table predates several
+**9 live, 7 wired pending API key**, out of 16 tools listed here (this table predates several
 later additions — OCR, Page Numbers, Bates Numbering, Header & Footer, Resize PDF, etc. — and
 hasn't been reconciled with the full current tool list; treat it as a snapshot of the CloudConvert
 tools specifically, not a complete inventory).

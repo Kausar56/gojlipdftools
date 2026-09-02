@@ -29,6 +29,39 @@ export type Tool = {
 
 export const tools: Tool[] = [
   {
+    slug: "ai-summarize",
+    name: "AI Summarize",
+    shortDescription: "Summarize a PDF with AI and ask follow-up questions.",
+    heroDescription: "Summarize a PDF with AI, then chat with it to ask follow-up questions.",
+    accent: "primary",
+    category: "core",
+    icon: "sparkle",
+    accept: "application/pdf",
+    guideIntro:
+      "Don't have time to read a long report or contract in full? Gojli's AI Summarize tool reads your PDF and gives you a concise summary right away, then lets you ask follow-up questions about the document in a simple chat.",
+    guideSteps: [
+      {
+        title: "Upload your PDF",
+        description:
+          "Choose the PDF you want summarized. Its text is extracted right in your browser, then sent to an AI model to generate a summary.",
+      },
+      {
+        title: "Read the AI-generated summary",
+        description: "Within moments, a concise summary of the document appears in the chat panel.",
+      },
+      {
+        title: "Ask follow-up questions",
+        description:
+          "Type any question about the document — a specific clause, a number, a name — and the AI answers based on the document's actual content.",
+      },
+    ],
+    faqs: [
+      { question: "Do I need an account?", answer: "Yes, this tool requires being logged in, and the free plan includes a limited number of AI questions per month." },
+      { question: "Does this work on scanned PDFs?", answer: "Only if the PDF already has selectable text — for scanned images, run OCR first, then summarize." },
+      { question: "Is my document stored anywhere?", answer: "No, the extracted text is sent only to generate a response and isn't saved — refreshing the page clears the conversation." },
+    ],
+  },
+  {
     slug: "edit-pdf",
     name: "Edit PDF",
     shortDescription: "Add text, drawings, shapes, and images directly onto your PDF.",

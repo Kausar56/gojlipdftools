@@ -14,6 +14,10 @@ export type MegaMenuCategory = {
 
 export const megaMenu: MegaMenuCategory[] = [
   {
+    title: "AI Tools",
+    items: [{ label: "AI Summarize", slug: "ai-summarize" }],
+  },
+  {
     title: "Merge",
     items: [
       { label: "Merge PDF", slug: "merge-pdf" },

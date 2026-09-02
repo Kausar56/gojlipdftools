@@ -437,6 +437,13 @@ const paths: Record<string, React.ReactNode> = {
     </>
   ),
   paperclip: <path d="M8.5 12.5l6.5-6.5a3 3 0 0 1 4.2 4.2L11 18.4a5 5 0 0 1-7.1-7.1L12.5 2.7" />,
+  sparkle: (
+    <>
+      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />
+      <path d="M19 3v3.5M17.25 4.75h3.5" />
+      <path d="M5 17v2.5M3.75 18.25h2.5" />
+    </>
+  ),
 };
 
 export function ToolIcon({ name, className }: IconProps & { name: string }) {

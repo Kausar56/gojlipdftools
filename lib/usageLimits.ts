@@ -21,6 +21,29 @@ export async function getMonthlyUsageCount(supabase: SupabaseClient, userId: str
   return count ?? 0;
 }
 
+/** Same monthly window as getMonthlyUsageCount, but scoped to one tool_slug —
+ *  for quotas that must stay independent of the general office-conversion
+ *  count above (e.g. AI Summarize, see lib/aiConfig.ts), even though both
+ *  live in the same conversion_usage table. */
+export async function getMonthlyUsageCountForTool(
+  supabase: SupabaseClient,
+  userId: string,
+  toolSlug: string,
+): Promise<number> {
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  const { count } = await supabase
+    .from("conversion_usage")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("tool_slug", toolSlug)
+    .gte("created_at", startOfMonth.toISOString());
+
+  return count ?? 0;
+}
+
 export async function recordUsage(
   supabase: SupabaseClient,
   userId: string,
