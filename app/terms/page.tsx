@@ -9,7 +9,7 @@ export default function TermsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-14 sm:px-8">
       <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">Terms of Service</h1>
-      <p className="mt-2 text-sm text-base-content/50">Last updated: July 14, 2026</p>
+      <p className="mt-2 text-sm text-base-content/50">Last updated: September 3, 2026</p>
 
       <div className="mt-6 rounded-lg border border-base-300 bg-base-200 px-4 py-3 text-sm text-base-content/70">
         This is a general starting-point terms document for Gojli. Review and adapt it (ideally
@@ -20,6 +20,7 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Acceptance of terms</h2>
           <p className="mt-2">
+            Gojli is operated by Gojli Ltd. (&ldquo;Gojli&rdquo;, &ldquo;we&rdquo;, &ldquo;our&rdquo;).
             By using Gojli, you agree to these Terms of Service. If you don&apos;t agree, please
             don&apos;t use the site.
           </p>
@@ -28,13 +29,34 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Description of service</h2>
           <p className="mt-2">
-            Gojli provides free tools to merge, split, compress, convert, and otherwise work with
-            PDF files. Some tools run entirely in your browser; others may require sending a file to
-            a server for processing (see our{" "}
+            Gojli provides tools to merge, split, compress, convert, summarize, and otherwise work
+            with PDF files. Most tools run entirely in your browser; some (Office-format
+            conversions, AI Summarize) send content to a server or third-party service for
+            processing (see our{" "}
             <a href="/privacy" className="text-primary hover:underline">
               Privacy Policy
             </a>{" "}
             for details).
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-base-content">Paid plans and billing</h2>
+          <p className="mt-2">
+            Pro and Business plans are paid subscriptions, billed monthly or yearly as selected at
+            checkout. Payments are processed by{" "}
+            <a href="https://www.paddle.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              Paddle.com Market Limited
+            </a>
+            , our reseller and merchant of record — Paddle handles payment collection, sales tax/VAT,
+            and invoicing on our behalf, and your card/payment details are held by Paddle, not Gojli.
+            Subscriptions renew automatically each billing cycle until canceled; you can cancel or
+            manage your subscription anytime from your Gojli dashboard, which links directly to
+            Paddle&apos;s self-service billing pages. See our{" "}
+            <a href="/refund-policy" className="text-primary hover:underline">
+              Refund Policy
+            </a>{" "}
+            for how refunds are handled.
           </p>
         </section>
 
@@ -59,8 +81,9 @@ export default function TermsPage() {
         <section>
           <h2 className="text-lg font-semibold text-base-content">Limitation of liability</h2>
           <p className="mt-2">
-            To the fullest extent permitted by law, Gojli and its operators aren&apos;t liable for
-            any indirect, incidental, or consequential damages arising from your use of the service.
+            To the fullest extent permitted by law, Gojli Ltd. and its operators aren&apos;t liable
+            for any indirect, incidental, or consequential damages arising from your use of the
+            service.
           </p>
         </section>
 
@@ -74,7 +97,13 @@ export default function TermsPage() {
 
         <section>
           <h2 className="text-lg font-semibold text-base-content">Contact us</h2>
-          <p className="mt-2">Questions about these terms? Reach out at [add your contact email here].</p>
+          <p className="mt-2">
+            Questions about these terms? Reach out at{" "}
+            <a href="mailto:support@gojli.com" className="text-primary hover:underline">
+              support@gojli.com
+            </a>
+            .
+          </p>
         </section>
       </div>
     </div>

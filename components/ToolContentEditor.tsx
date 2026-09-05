@@ -33,6 +33,8 @@ export function ToolContentEditor({
 
   const [guideTitle, setGuideTitle] = useState(initialContent.guideTitle);
   const [guideHtml, setGuideHtml] = useState(initialContent.guideHtml);
+  const [seoTitle, setSeoTitle] = useState(initialContent.seoTitle);
+  const [seoDescription, setSeoDescription] = useState(initialContent.seoDescription);
   const [faqs, setFaqs] = useState<FaqState[]>(() =>
     initialContent.faqs.map((faq, i) => ({ id: `initial-faq-${i}`, question: faq.question, answerHtml: faq.answerHtml })),
   );
@@ -100,6 +102,40 @@ export function ToolContentEditor({
     <div className="space-y-6">
       <form onSubmit={handleSave} className="space-y-8">
         <input type="hidden" name="guideHtml" value={guideHtml} />
+
+        <div>
+          <h2 className="text-sm font-semibold text-base-content/80">SEO</h2>
+          <p className="mt-1 text-xs text-base-content/50">
+            The page&apos;s <code>&lt;title&gt;</code> tag and search-result snippet. &quot;| Gojli&quot; is
+            added automatically — don&apos;t include it here.
+          </p>
+          <label className="mt-2 block text-xs font-medium text-base-content/60">
+            SEO Title
+            <input
+              type="text"
+              name="seoTitle"
+              value={seoTitle}
+              onChange={(event) => setSeoTitle(event.target.value)}
+              placeholder={tool.name}
+              maxLength={70}
+              className="input input-bordered input-sm mt-1 w-full"
+            />
+            <span className="mt-0.5 block text-right text-[11px] text-base-content/40">{seoTitle.length}/60 recommended</span>
+          </label>
+          <label className="mt-3 block text-xs font-medium text-base-content/60">
+            SEO Description
+            <textarea
+              name="seoDescription"
+              value={seoDescription}
+              onChange={(event) => setSeoDescription(event.target.value)}
+              placeholder={tool.heroDescription}
+              maxLength={200}
+              rows={2}
+              className="textarea textarea-bordered textarea-sm mt-1 w-full"
+            />
+            <span className="mt-0.5 block text-right text-[11px] text-base-content/40">{seoDescription.length}/160 recommended</span>
+          </label>
+        </div>
 
         <div>
           <h2 className="text-sm font-semibold text-base-content/80">Guide</h2>

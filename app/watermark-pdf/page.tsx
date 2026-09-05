@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("watermark-pdf")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function WatermarkPdfPage() {
   return <ToolPageLayout tool={tool} maxWidthClassName="max-w-7xl" workspace={<WatermarkPdfWorkspace />} />;

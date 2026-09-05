@@ -3,8 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ToolIcon } from "./icons";
+import { PaddleCheckoutButton } from "./PaddleCheckoutButton";
+import type { PaidPlanId } from "@/lib/paddleConfig";
 
 type Plan = {
+  id: "free" | PaidPlanId;
   name: string;
   tagline: string;
   monthlyPrice: number;
@@ -17,6 +20,7 @@ type Plan = {
 
 const plans: Plan[] = [
   {
+    id: "free",
     name: "Free",
     tagline: "For everyday PDF tasks",
     monthlyPrice: 0,
@@ -32,11 +36,12 @@ const plans: Plan[] = [
     ],
   },
   {
+    id: "pro",
     name: "Pro",
     tagline: "For frequent, heavier workloads",
     monthlyPrice: 9,
     yearlyPrice: 90,
-    cta: "Coming soon",
+    cta: "Upgrade to Pro",
     highlighted: true,
     features: [
       "Everything in Free",
@@ -48,11 +53,12 @@ const plans: Plan[] = [
     ],
   },
   {
+    id: "business",
     name: "Business",
     tagline: "For teams and organizations",
     monthlyPrice: 29,
     yearlyPrice: 290,
-    cta: "Coming soon",
+    cta: "Upgrade to Business",
     features: [
       "Everything in Pro",
       "Up to 10 team members",
@@ -64,7 +70,15 @@ const plans: Plan[] = [
   },
 ];
 
-export function PricingSection() {
+export function PricingSection({
+  userId,
+  userEmail,
+  currentPlan,
+}: {
+  userId: string | null;
+  userEmail: string | null;
+  currentPlan: "free" | PaidPlanId;
+}) {
   const [yearly, setYearly] = useState(false);
 
   return (
@@ -149,7 +163,11 @@ export function PricingSection() {
                   ))}
                 </ul>
 
-                {plan.href ? (
+                {userId && plan.id !== "free" && currentPlan === plan.id ? (
+                  <button type="button" disabled className="btn btn-outline mt-6">
+                    Current Plan
+                  </button>
+                ) : plan.href ? (
                   <Link
                     href={plan.href}
                     className={`btn mt-6 ${plan.highlighted ? "btn-primary" : "btn-outline btn-primary"}`}
@@ -157,14 +175,15 @@ export function PricingSection() {
                     {plan.cta}
                   </Link>
                 ) : (
-                  <button
-                    type="button"
-                    disabled
-                    title="Billing isn't live yet"
-                    className={`btn mt-6 ${plan.highlighted ? "btn-primary" : "btn-outline"}`}
+                  <PaddleCheckoutButton
+                    plan={plan.id as PaidPlanId}
+                    interval={yearly ? "year" : "month"}
+                    userId={userId}
+                    userEmail={userEmail}
+                    className={`btn mt-6 ${plan.highlighted ? "btn-primary" : "btn-outline btn-primary"}`}
                   >
                     {plan.cta}
-                  </button>
+                  </PaddleCheckoutButton>
                 )}
               </div>
             );

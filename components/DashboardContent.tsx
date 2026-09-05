@@ -24,12 +24,18 @@ export function DashboardContent({
   monthlyUsed,
   monthlyLimit,
   isBanned,
+  planRenewsAt,
+  paddleCancelUrl,
+  paddleUpdatePaymentMethodUrl,
 }: {
   user: User;
   plan: PlanId;
   monthlyUsed: number;
   monthlyLimit: number | null;
   isBanned: boolean;
+  planRenewsAt: string | null;
+  paddleCancelUrl: string | null;
+  paddleUpdatePaymentMethodUrl: string | null;
 }) {
   const router = useRouter();
   const [recentTools, setRecentTools] = useState<Tool[] | null>(null);
@@ -113,6 +119,33 @@ export function DashboardContent({
             Covers PDF ↔ Word/Excel/PowerPoint conversions, which run on a third-party server.
             Browser-only tools (merge, split, compress, etc.) are always unlimited.
           </p>
+        </section>
+      )}
+
+      {!isBanned && plan !== "free" && (
+        <section className="mt-6 card border border-base-300 bg-base-100 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-base-content">{planLabels[plan]}</p>
+              {planRenewsAt && (
+                <p className="mt-0.5 text-sm text-base-content/60">
+                  Renews on {new Date(planRenewsAt).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {paddleUpdatePaymentMethodUrl && (
+                <a href={paddleUpdatePaymentMethodUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-sm">
+                  Update Payment Method
+                </a>
+              )}
+              {paddleCancelUrl && (
+                <a href={paddleCancelUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline btn-error btn-sm">
+                  Cancel Subscription
+                </a>
+              )}
+            </div>
+          </div>
         </section>
       )}
 

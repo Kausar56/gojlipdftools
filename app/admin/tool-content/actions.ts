@@ -32,10 +32,15 @@ export async function updateToolContent(slug: string, formData: FormData) {
     .map((question, i) => ({ question: question.trim(), answerHtml: sanitizeRichTextHtml(faqAnswers[i] ?? "") }))
     .filter((faq) => faq.question || faq.answerHtml);
 
+  const seoTitle = String(formData.get("seoTitle") ?? "").trim();
+  const seoDescription = String(formData.get("seoDescription") ?? "").trim();
+
   const content: ToolContentOverride = {
     guideTitle: guideTitle || null,
     guideHtml: guideHtml || null,
     faqs: faqs.length > 0 ? faqs : null,
+    seoTitle: seoTitle || null,
+    seoDescription: seoDescription || null,
   };
 
   await setToolContentOverride(slug, content);

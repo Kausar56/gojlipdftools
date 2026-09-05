@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
     // Blog thumbnails and in-content images are hosted on Cloudinary.
     remotePatterns: [{ protocol: "https", hostname: "res.cloudinary.com" }],
   },
+  allowedDevOrigins: ["domestic-scenario-tones-reviewer.trycloudflare.com"],
 };
 
 export default nextConfig;

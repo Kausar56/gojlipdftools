@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("html-to-pdf")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function HtmlToPdfPage() {
   return <ToolPageLayout tool={tool} workspace={<HtmlToPdfWorkspace />} />;

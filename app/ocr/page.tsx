@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("ocr")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function OcrPage() {
   return <ToolPageLayout tool={tool} workspace={<OcrPdfWorkspace />} />;

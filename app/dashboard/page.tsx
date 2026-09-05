@@ -20,6 +20,11 @@ export default async function DashboardPage() {
     if (data.user) {
       const plan = await getUserPlan(supabase, data.user.id);
       const monthlyUsed = await getMonthlyUsageCount(supabase, data.user.id);
+      const { data: billingRow } = await supabase
+        .from("profiles")
+        .select("plan_renews_at, paddle_cancel_url, paddle_update_payment_method_url")
+        .eq("id", data.user.id)
+        .maybeSingle();
 
       return (
         <DashboardContent
@@ -28,6 +33,9 @@ export default async function DashboardPage() {
           monthlyUsed={monthlyUsed}
           monthlyLimit={getPlanLimits(plan).monthlyConversions}
           isBanned={data.user.app_metadata?.banned === true}
+          planRenewsAt={billingRow?.plan_renews_at ?? null}
+          paddleCancelUrl={billingRow?.paddle_cancel_url ?? null}
+          paddleUpdatePaymentMethodUrl={billingRow?.paddle_update_payment_method_url ?? null}
         />
       );
     }

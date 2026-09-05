@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("pdf-to-text")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function PdfToTextPage() {
   return <ToolPageLayout tool={tool} workspace={<PdfToTextWorkspace />} />;

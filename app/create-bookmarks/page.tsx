@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("create-bookmarks")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function CreateBookmarksPage() {
   return <ToolPageLayout tool={tool} workspace={<CreateBookmarksWorkspace />} />;

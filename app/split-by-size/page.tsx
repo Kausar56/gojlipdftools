@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("split-by-size")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function SplitBySizePage() {
   return <ToolPageLayout tool={tool} workspace={<SplitBySizeWorkspace />} />;

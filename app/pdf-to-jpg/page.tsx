@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("pdf-to-jpg")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function PdfToJpgPage() {
   return <ToolPageLayout tool={tool} workspace={<PdfToJpgWorkspace />} />;

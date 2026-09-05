@@ -22,6 +22,13 @@ create table if not exists public.tool_content (
   -- Array of {question: string, answer_html: string}, or null to fall back
   -- to lib/tools.ts's faqs.
   faqs jsonb,
+  -- <title> tag content (before the root layout's "%s | Gojli" suffix is
+  -- appended — do not include "| Gojli" here), or null to fall back to
+  -- tool.name. Also used for openGraph/twitter title — see lib/seo.ts.
+  seo_title text,
+  -- <meta name="description">, or null to fall back to tool.heroDescription.
+  -- Also used for openGraph/twitter description.
+  seo_description text,
   updated_at timestamptz not null default now()
 );
 
@@ -30,6 +37,8 @@ create table if not exists public.tool_content (
 -- guide_html article field above) was already applied.
 alter table public.tool_content add column if not exists guide_title text;
 alter table public.tool_content add column if not exists guide_html text;
+alter table public.tool_content add column if not exists seo_title text;
+alter table public.tool_content add column if not exists seo_description text;
 alter table public.tool_content drop column if exists guide_intro_html;
 alter table public.tool_content drop column if exists guide_steps;
 

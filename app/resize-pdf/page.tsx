@@ -6,7 +6,9 @@ import { toolMetadata } from "@/lib/seo";
 
 const tool = getToolBySlug("resize-pdf")!;
 
-export const metadata: Metadata = toolMetadata(tool);
+export async function generateMetadata(): Promise<Metadata> {
+  return toolMetadata(tool);
+}
 
 export default function ResizePdfPage() {
   return <ToolPageLayout tool={tool} workspace={<ResizePdfWorkspace />} />;

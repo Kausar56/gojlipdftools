@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "node scripts/sync-pdf-worker.mjs"
+    "postinstall": "node scripts/sync-pdf-worker.mjs",
+    "tunnel": "cloudflared tunnel --url http://localhost:3000"
   },
   "dependencies": {
+    "@paddle/paddle-js": "^1.6.5",
+    "@paddle/paddle-node-sdk": "^3.10.0",
     "@pdfsmaller/pdf-decrypt": "^1.0.1",
     "@pdfsmaller/pdf-encrypt": "^1.0.2",
     "@supabase/ssr": "^0.12.3",
