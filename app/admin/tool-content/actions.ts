@@ -34,6 +34,7 @@ export async function updateToolContent(slug: string, formData: FormData) {
 
   const seoTitle = String(formData.get("seoTitle") ?? "").trim();
   const seoDescription = String(formData.get("seoDescription") ?? "").trim();
+  const pageHeading = String(formData.get("pageHeading") ?? "").trim();
 
   const content: ToolContentOverride = {
     guideTitle: guideTitle || null,
@@ -41,6 +42,7 @@ export async function updateToolContent(slug: string, formData: FormData) {
     faqs: faqs.length > 0 ? faqs : null,
     seoTitle: seoTitle || null,
     seoDescription: seoDescription || null,
+    pageHeading: pageHeading || null,
   };
 
   await setToolContentOverride(slug, content);

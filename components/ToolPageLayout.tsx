@@ -38,12 +38,12 @@ export async function ToolPageLayout({
         "@type": "BreadcrumbList",
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
-          { "@type": "ListItem", position: 2, name: tool.name, item: toolUrl },
+          { "@type": "ListItem", position: 2, name: content.pageHeading, item: toolUrl },
         ],
       },
       {
         "@type": "SoftwareApplication",
-        name: tool.name,
+        name: content.pageHeading,
         description: tool.heroDescription,
         url: toolUrl,
         applicationCategory: "UtilitiesApplication",
@@ -54,7 +54,7 @@ export async function ToolPageLayout({
         ? [
             {
               "@type": "HowTo",
-              name: `How to Use ${tool.name}`,
+              name: `How to Use ${content.pageHeading}`,
               description: tool.heroDescription,
               step: content.guideSteps.map((step, index) => ({
                 "@type": "HowToStep",
@@ -91,12 +91,12 @@ export async function ToolPageLayout({
               <li>
                 <Link href="/">Home</Link>
               </li>
-              <li>{tool.name}</li>
+              <li>{content.pageHeading}</li>
             </ul>
           </div>
 
           <div className="mt-4 text-center sm:text-left">
-            <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">{tool.name}</h1>
+            <h1 className="text-3xl font-semibold text-base-content sm:text-4xl">{content.pageHeading}</h1>
             <p className="mt-3 max-w-2xl text-base text-base-content/70 sm:text-lg">{tool.heroDescription}</p>
           </div>
         </div>

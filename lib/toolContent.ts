@@ -10,6 +10,7 @@ export type ToolContentOverride = {
   faqs: ToolFaqOverride[] | null;
   seoTitle: string | null;
   seoDescription: string | null;
+  pageHeading: string | null;
 };
 
 export type EffectiveToolContent = {
@@ -21,6 +22,11 @@ export type EffectiveToolContent = {
   // tool.name/tool.heroDescription), unlike the override fields above.
   seoTitle: string;
   seoDescription: string;
+  // The on-page <h1> shown above the workspace (components/ToolPageLayout.tsx)
+  // — deliberately separate from seoTitle: the <title> tag can be more
+  // keyword-heavy for search snippets, while the visible H1 usually reads
+  // better a little shorter/plainer. Falls back to tool.name.
+  pageHeading: string;
   // lib/tools.ts's guideSteps when the guide is still the default synthesized
   // one; null once an admin has written their own free-form guide_html,
   // since that replaces the steps entirely and they'd no longer describe
@@ -83,7 +89,7 @@ async function readToolContentOverrideFresh(slug: string): Promise<ToolContentOv
     const admin = createAdminClient();
     const { data } = await admin
       .from("tool_content")
-      .select("guide_title, guide_html, faqs, seo_title, seo_description")
+      .select("guide_title, guide_html, faqs, seo_title, seo_description, page_heading")
       .eq("slug", slug)
       .maybeSingle();
     if (!data) return null;
@@ -93,6 +99,7 @@ async function readToolContentOverrideFresh(slug: string): Promise<ToolContentOv
       faqs: (data.faqs as ToolFaqOverride[] | null) ?? null,
       seoTitle: (data.seo_title as string | null) ?? null,
       seoDescription: (data.seo_description as string | null) ?? null,
+      pageHeading: (data.page_heading as string | null) ?? null,
     };
   } catch {
     // Table not created yet (docs/tool-content-schema.sql not run) or
@@ -132,6 +139,7 @@ export async function getEffectiveToolContent(tool: Tool): Promise<EffectiveTool
     guideSteps: override?.guideHtml ? null : tool.guideSteps,
     seoTitle: override?.seoTitle || tool.name,
     seoDescription: override?.seoDescription || tool.heroDescription,
+    pageHeading: override?.pageHeading || tool.name,
   };
 }
 
@@ -168,6 +176,7 @@ export async function setToolContentOverride(slug: string, content: ToolContentO
     faqs: content.faqs,
     seo_title: content.seoTitle,
     seo_description: content.seoDescription,
+    page_heading: content.pageHeading,
   });
   if (error) throw new Error(error.message);
 }

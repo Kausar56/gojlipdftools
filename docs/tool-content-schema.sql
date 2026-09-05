@@ -29,6 +29,9 @@ create table if not exists public.tool_content (
   -- <meta name="description">, or null to fall back to tool.heroDescription.
   -- Also used for openGraph/twitter description.
   seo_description text,
+  -- The on-page <h1> above the workspace, or null to fall back to
+  -- tool.name. Deliberately separate from seo_title — see lib/toolContent.ts.
+  page_heading text,
   updated_at timestamptz not null default now()
 );
 
@@ -39,6 +42,7 @@ alter table public.tool_content add column if not exists guide_title text;
 alter table public.tool_content add column if not exists guide_html text;
 alter table public.tool_content add column if not exists seo_title text;
 alter table public.tool_content add column if not exists seo_description text;
+alter table public.tool_content add column if not exists page_heading text;
 alter table public.tool_content drop column if exists guide_intro_html;
 alter table public.tool_content drop column if exists guide_steps;
 

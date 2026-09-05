@@ -35,6 +35,7 @@ export function ToolContentEditor({
   const [guideHtml, setGuideHtml] = useState(initialContent.guideHtml);
   const [seoTitle, setSeoTitle] = useState(initialContent.seoTitle);
   const [seoDescription, setSeoDescription] = useState(initialContent.seoDescription);
+  const [pageHeading, setPageHeading] = useState(initialContent.pageHeading);
   const [faqs, setFaqs] = useState<FaqState[]>(() =>
     initialContent.faqs.map((faq, i) => ({ id: `initial-faq-${i}`, question: faq.question, answerHtml: faq.answerHtml })),
   );
@@ -134,6 +135,22 @@ export function ToolContentEditor({
               className="textarea textarea-bordered textarea-sm mt-1 w-full"
             />
             <span className="mt-0.5 block text-right text-[11px] text-base-content/40">{seoDescription.length}/160 recommended</span>
+          </label>
+          <label className="mt-3 block text-xs font-medium text-base-content/60">
+            Page Heading (H1)
+            <input
+              type="text"
+              name="pageHeading"
+              value={pageHeading}
+              onChange={(event) => setPageHeading(event.target.value)}
+              placeholder={tool.name}
+              maxLength={100}
+              className="input input-bordered input-sm mt-1 w-full"
+            />
+            <span className="mt-1 block text-[11px] font-normal text-base-content/40">
+              The heading shown on the page itself, above the tool — usually shorter/plainer than the SEO
+              Title above.
+            </span>
           </label>
         </div>
 
