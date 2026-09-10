@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { initializePaddle, type Paddle } from "@paddle/paddle-js";
-import { PADDLE_CLIENT_TOKEN, PADDLE_ENVIRONMENT, getPaddlePriceId, type PaidPlanId, type BillingInterval } from "@/lib/paddleConfig";
+import { PADDLE_CLIENT_TOKEN, PADDLE_ENVIRONMENT } from "@/lib/paddleConfig";
 
 // One shared instance across every button on the page — Paddle.js only
 // needs (and expects) initializePaddle() to run once per page load.
@@ -18,15 +18,23 @@ function getPaddle(): Promise<Paddle | undefined> {
 }
 
 export function PaddleCheckoutButton({
-  plan,
-  interval,
+  planId,
+  priceId,
   userId,
   userEmail,
   className,
   children,
 }: {
-  plan: PaidPlanId;
-  interval: BillingInterval;
+  /** The plan's own id (e.g. "pro") — stored in customData so the webhook
+   *  (app/api/webhooks/paddle/route.ts) knows which plan to grant without
+   *  needing to look the price ID back up itself. */
+  planId: string;
+  /** Resolved server-side by app/pricing/page.tsx (lib/pricingPlans.ts's
+   *  getPriceIdForInterval) for whichever billing interval is selected —
+   *  null when this plan/interval combination has no Paddle price
+   *  configured yet, in which case the button shows a friendly error
+   *  instead of opening a broken checkout. */
+  priceId: string | null;
   userId: string | null;
   userEmail: string | null;
   className?: string;
@@ -41,7 +49,6 @@ export function PaddleCheckoutButton({
       return;
     }
 
-    const priceId = getPaddlePriceId(plan, interval);
     if (!PADDLE_CLIENT_TOKEN || !priceId) {
       toast.error("Billing isn't configured yet — please try again later.");
       return;
@@ -54,13 +61,13 @@ export function PaddleCheckoutButton({
         toast.error("Couldn't load the checkout. Please try again.");
         return;
       }
-      // customData.userId is how the webhook (app/api/webhooks/paddle/
-      // route.ts) later knows which Supabase account to upgrade — Paddle
-      // has no concept of our own user IDs otherwise.
+      // customData.userId is how the webhook later knows which Supabase
+      // account to upgrade — Paddle has no concept of our own user IDs
+      // otherwise.
       paddle.Checkout.open({
         items: [{ priceId, quantity: 1 }],
         customer: userEmail ? { email: userEmail } : undefined,
-        customData: { userId, plan },
+        customData: { userId, plan: planId },
       });
     } finally {
       setLoading(false);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Paddle, Environment, EventName, type SubscriptionNotification, type TransactionNotification } from "@paddle/paddle-node-sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getPlanForPriceId, planDisplayName, type PaidPlanId } from "@/lib/paddleConfig";
+import { getPlanForPriceId } from "@/lib/pricingPlans";
 import { sendEmail, purchaseConfirmationEmail } from "@/lib/email";
 
 function getPaddleServerClient(): Paddle {
@@ -99,12 +99,18 @@ async function syncSubscription(paddle: Paddle, notification: SubscriptionNotifi
   const subscription = await paddle.subscriptions.get(notification.id);
 
   const priceId = subscription.items[0]?.price?.id;
-  const plan: PaidPlanId | null = priceId ? getPlanForPriceId(priceId) : null;
+  const plan = priceId ? await getPlanForPriceId(priceId) : null;
   const isActive = subscription.status === "active" || subscription.status === "trialing";
-  console.log("[paddle webhook] syncSubscription", { userId, priceId, plan, status: subscription.status, willSetPlanTo: isActive && plan ? plan : "free" });
+  console.log("[paddle webhook] syncSubscription", {
+    userId,
+    priceId,
+    planId: plan?.id,
+    status: subscription.status,
+    willSetPlanTo: isActive && plan ? plan.id : "free",
+  });
   if (priceId && !plan) {
     console.error(
-      "[paddle webhook] priceId doesn't match any plan in lib/paddleConfig.ts — check NEXT_PUBLIC_PADDLE_PRICE_* env vars match this exact price ID:",
+      "[paddle webhook] priceId doesn't match any plan in pricing_plans — check monthly_price_id/yearly_price_id in /admin/pricing match this exact price ID:",
       priceId,
     );
   }
@@ -113,7 +119,7 @@ async function syncSubscription(paddle: Paddle, notification: SubscriptionNotifi
   const { error } = await admin
     .from("profiles")
     .update({
-      plan: isActive && plan ? plan : "free",
+      plan: isActive && plan ? plan.id : "free",
       paddle_customer_id: subscription.customerId,
       paddle_subscription_id: subscription.id,
       paddle_subscription_status: subscription.status,
@@ -141,7 +147,7 @@ async function sendPurchaseConfirmation(transaction: TransactionNotification) {
   if (!email) return;
 
   const priceItem = transaction.items[0]?.price;
-  const plan = priceItem ? getPlanForPriceId(priceItem.id) : null;
+  const plan = priceItem ? await getPlanForPriceId(priceItem.id) : null;
   const totalMinorUnits = transaction.details?.totals?.total;
   const amount =
     totalMinorUnits !== undefined
@@ -152,7 +158,7 @@ async function sendPurchaseConfirmation(transaction: TransactionNotification) {
     : "—";
 
   const { subject, html } = purchaseConfirmationEmail({
-    planName: plan ? planDisplayName(plan) : "your plan",
+    planName: plan?.name ?? "your plan",
     billingCycle,
     amount,
     purchaseDate: new Date(transaction.billedAt ?? transaction.createdAt).toLocaleDateString(),

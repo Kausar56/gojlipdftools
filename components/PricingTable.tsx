@@ -1,21 +1,9 @@
 import { ToolIcon } from "./icons";
+import type { PricingPlan } from "@/lib/pricingPlans";
+import type { ComparisonRow, ComparisonCellValue } from "@/lib/pricingComparison";
 
-type CellValue = boolean | string;
-
-const rows: { feature: string; free: CellValue; pro: CellValue; business: CellValue }[] = [
-  { feature: "Core PDF tools (merge, split, compress, rotate, watermark)", free: true, pro: true, business: true },
-  { feature: "Password protect and unlock", free: true, pro: true, business: true },
-  { feature: "Max file size", free: "25 MB", pro: "200 MB", business: "1 GB" },
-  { feature: "Word, Excel, PowerPoint conversions", free: false, pro: true, business: true },
-  { feature: "Batch processing", free: false, pro: true, business: true },
-  { feature: "Priority processing", free: false, pro: true, business: true },
-  { feature: "Team members", free: "1", pro: "1", business: "Up to 10" },
-  { feature: "Support", free: "Community", pro: "Email", business: "Priority + phone" },
-  { feature: "Custom watermark branding", free: false, pro: false, business: true },
-  { feature: "Usage analytics dashboard", free: false, pro: false, business: true },
-];
-
-function Cell({ value }: { value: CellValue }) {
+function Cell({ value }: { value: ComparisonCellValue | undefined }) {
+  if (value === undefined) return null;
   if (typeof value === "string") {
     return <span className="text-sm text-base-content/80">{value}</span>;
   }
@@ -26,7 +14,9 @@ function Cell({ value }: { value: CellValue }) {
   );
 }
 
-export function PricingTable() {
+export function PricingTable({ plans, rows }: { plans: PricingPlan[]; rows: ComparisonRow[] }) {
+  if (plans.length === 0 || rows.length === 0) return null;
+
   return (
     <div className="bg-base-100 py-16">
       <div className="mx-auto max-w-5xl px-4 sm:px-8">
@@ -37,24 +27,25 @@ export function PricingTable() {
             <thead>
               <tr className="border-b border-base-300">
                 <th className="py-3 pr-4 text-sm font-medium text-base-content/60">Feature</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-base-content">Free</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-primary">Pro</th>
-                <th className="px-4 py-3 text-center text-sm font-semibold text-base-content">Business</th>
+                {plans.map((plan) => (
+                  <th
+                    key={plan.id}
+                    className={`px-4 py-3 text-center text-sm font-semibold ${plan.highlighted ? "text-primary" : "text-base-content"}`}
+                  >
+                    {plan.name}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.feature} className="border-b border-base-300/60">
+                <tr key={row.id} className="border-b border-base-300/60">
                   <td className="py-3 pr-4 text-sm text-base-content/80">{row.feature}</td>
-                  <td className="px-4 py-3 text-center">
-                    <Cell value={row.free} />
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Cell value={row.pro} />
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Cell value={row.business} />
-                  </td>
+                  {plans.map((plan) => (
+                    <td key={plan.id} className="px-4 py-3 text-center">
+                      <Cell value={row.values[plan.id]} />
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

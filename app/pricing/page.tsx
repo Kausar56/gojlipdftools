@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { getUserPlan } from "@/lib/usageLimits";
+import { getPricingPlans } from "@/lib/pricingPlans";
+import { getComparisonRows } from "@/lib/pricingComparison";
 import { PricingSection } from "@/components/PricingSection";
 import { PricingTable } from "@/components/PricingTable";
 
@@ -17,7 +19,7 @@ export const dynamic = "force-dynamic";
 export default async function PricingPage() {
   let userId: string | null = null;
   let userEmail: string | null = null;
-  let currentPlan: "free" | "pro" | "business" = "free";
+  let currentPlan = "free";
 
   try {
     const supabase = await createClient();
@@ -31,10 +33,12 @@ export default async function PricingPage() {
     // Supabase env vars aren't set up yet — treat as logged out below.
   }
 
+  const [plans, comparisonRows] = await Promise.all([getPricingPlans(), getComparisonRows()]);
+
   return (
     <div>
-      <PricingSection userId={userId} userEmail={userEmail} currentPlan={currentPlan} />
-      <PricingTable />
+      <PricingSection plans={plans} userId={userId} userEmail={userEmail} currentPlan={currentPlan} />
+      <PricingTable plans={plans} rows={comparisonRows} />
     </div>
   );
 }

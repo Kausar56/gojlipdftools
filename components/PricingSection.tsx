@@ -4,80 +4,22 @@ import { useState } from "react";
 import Link from "next/link";
 import { ToolIcon } from "./icons";
 import { PaddleCheckoutButton } from "./PaddleCheckoutButton";
-import type { PaidPlanId } from "@/lib/paddleConfig";
+import type { PricingPlan } from "@/lib/pricingPlans";
 
-type Plan = {
-  id: "free" | PaidPlanId;
-  name: string;
-  tagline: string;
-  monthlyPrice: number;
-  yearlyPrice: number;
-  cta: string;
-  href?: string;
-  highlighted?: boolean;
-  features: string[];
-};
-
-const plans: Plan[] = [
-  {
-    id: "free",
-    name: "Free",
-    tagline: "For everyday PDF tasks",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    cta: "Get Started",
-    href: "/#tools",
-    features: [
-      "Unlimited use of all core PDF tools",
-      "Merge, split, compress, rotate, watermark",
-      "Password protect and unlock PDFs",
-      "Files up to 25 MB",
-      "No account required",
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    tagline: "For frequent, heavier workloads",
-    monthlyPrice: 9,
-    yearlyPrice: 90,
-    cta: "Upgrade to Pro",
-    highlighted: true,
-    features: [
-      "Everything in Free",
-      "Files up to 200 MB",
-      "Word, Excel, and PowerPoint conversions",
-      "Batch processing for multiple files",
-      "Priority processing",
-      "Email support",
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    tagline: "For teams and organizations",
-    monthlyPrice: 29,
-    yearlyPrice: 290,
-    cta: "Upgrade to Business",
-    features: [
-      "Everything in Pro",
-      "Up to 10 team members",
-      "Files up to 1 GB",
-      "Custom watermark branding",
-      "Priority phone and email support",
-      "Usage analytics dashboard",
-    ],
-  },
-];
+function formatPrice(amount: number): string {
+  return Number.isInteger(amount) ? `${amount}` : amount.toFixed(2);
+}
 
 export function PricingSection({
+  plans,
   userId,
   userEmail,
   currentPlan,
 }: {
+  plans: PricingPlan[];
   userId: string | null;
   userEmail: string | null;
-  currentPlan: "free" | PaidPlanId;
+  currentPlan: string;
 }) {
   const [yearly, setYearly] = useState(false);
 
@@ -133,9 +75,11 @@ export function PricingSection({
         <div className="mx-auto grid max-w-5xl gap-6 px-4 sm:px-8 md:grid-cols-3">
           {plans.map((plan) => {
             const price = yearly ? plan.yearlyPrice : plan.monthlyPrice;
+            const priceId = yearly ? plan.yearlyPriceId : plan.monthlyPriceId;
+            const isCheckoutPlan = Boolean(plan.monthlyPriceId || plan.yearlyPriceId);
             return (
               <div
-                key={plan.name}
+                key={plan.id}
                 className={`card flex flex-col bg-base-100 p-6 ${
                   plan.highlighted ? "border-2 border-primary shadow-lg" : "border border-base-300"
                 }`}
@@ -148,25 +92,40 @@ export function PricingSection({
                 <h2 className="mt-2 text-lg font-semibold text-base-content">{plan.name}</h2>
                 <p className="mt-1 text-sm text-base-content/60">{plan.tagline}</p>
                 <p className="mt-4">
-                  <span className="text-3xl font-bold text-base-content">${price}</span>
+                  <span className="text-3xl font-bold text-base-content">${formatPrice(price)}</span>
                   <span className="text-sm text-base-content/60">
                     {price === 0 ? "" : yearly ? "/year" : "/month"}
                   </span>
                 </p>
+                {yearly && price > 0 && (
+                  <p className="mt-0.5 text-xs text-base-content/50">
+                    (${formatPrice(price / 12)}/month, billed annually)
+                  </p>
+                )}
 
                 <ul className="mt-5 flex-1 space-y-2.5 text-sm text-base-content/80">
                   {plan.features.map((feature) => (
-                    <li key={feature} className="flex gap-2">
-                      <ToolIcon name="check" className="h-4 w-4 flex-none text-secondary" />
-                      {feature}
+                    <li key={feature.text} className="flex gap-2">
+                      <ToolIcon name={feature.icon ?? "check"} className={`h-4 w-4 flex-none ${feature.icon ? "text-primary" : "text-secondary"}`} />
+                      {feature.text}
                     </li>
                   ))}
                 </ul>
 
-                {userId && plan.id !== "free" && currentPlan === plan.id ? (
+                {userId && isCheckoutPlan && currentPlan === plan.id ? (
                   <button type="button" disabled className="btn btn-outline mt-6">
                     Current Plan
                   </button>
+                ) : isCheckoutPlan ? (
+                  <PaddleCheckoutButton
+                    planId={plan.id}
+                    priceId={priceId}
+                    userId={userId}
+                    userEmail={userEmail}
+                    className={`btn mt-6 ${plan.highlighted ? "btn-primary" : "btn-outline btn-primary"}`}
+                  >
+                    {plan.cta}
+                  </PaddleCheckoutButton>
                 ) : plan.href ? (
                   <Link
                     href={plan.href}
@@ -175,20 +134,22 @@ export function PricingSection({
                     {plan.cta}
                   </Link>
                 ) : (
-                  <PaddleCheckoutButton
-                    plan={plan.id as PaidPlanId}
-                    interval={yearly ? "year" : "month"}
-                    userId={userId}
-                    userEmail={userEmail}
-                    className={`btn mt-6 ${plan.highlighted ? "btn-primary" : "btn-outline btn-primary"}`}
-                  >
+                  <button type="button" disabled className="btn btn-outline mt-6">
                     {plan.cta}
-                  </PaddleCheckoutButton>
+                  </button>
                 )}
               </div>
             );
           })}
         </div>
+
+        <p className="relative mt-8 flex items-center justify-center gap-1.5 text-center text-sm text-base-content/60">
+          <ToolIcon name="shield" className="h-4 w-4 text-secondary" />
+          Secure checkout by Paddle &middot; Cancel anytime &middot;{" "}
+          <Link href="/refund-policy" className="text-primary hover:underline">
+            Refund Policy
+          </Link>
+        </p>
 
         <svg
           className="pointer-events-none absolute inset-x-0 bottom-0 h-12 w-full text-base-100 sm:h-16"

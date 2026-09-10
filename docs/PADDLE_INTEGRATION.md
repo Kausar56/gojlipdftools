@@ -41,14 +41,18 @@ column gets updated, alongside the existing admin-panel manual override
 
 | File | Role |
 |---|---|
-| `lib/paddleConfig.ts` | Single source of truth mapping Gojli's plan IDs (`pro`/`business`) to Paddle price IDs, and the reverse lookup the webhook needs. Change price IDs here (or their env vars) — nothing else needs to change. |
-| `components/PaddleCheckoutButton.tsx` | Client component. Loads Paddle.js once per page (`initializePaddle`), then opens the checkout overlay for a given plan/interval on click. Redirects to `/login` first if the visitor isn't signed in. |
-| `components/PricingSection.tsx` | The pricing cards. Pro/Business buttons are now `PaddleCheckoutButton`s instead of disabled placeholders; shows "Current Plan" instead of a buy button if the visitor already has that plan. |
-| `app/pricing/page.tsx` | Server Component — fetches the current user (if any) and their plan server-side, passes `userId`/`userEmail`/`currentPlan` down to `PricingSection`. `force-dynamic` since it depends on the session. |
+| `lib/pricingPlans.ts` | Reads/writes the `pricing_plans` table — the single source of truth for every plan's name, tagline, display price, features, and Paddle price IDs. `getPricingPlans()` (cached, public pages) / `getPricingPlansForEdit()` (fresh, admin) / `getPlanForPriceId()` (webhook's reverse lookup) / `savePricingPlan()` / `deletePricingPlan()`. |
+| `lib/paddleConfig.ts` | Just the Paddle.js client config now (`PADDLE_CLIENT_TOKEN`, `PADDLE_ENVIRONMENT`) — plan/price data moved to `lib/pricingPlans.ts` once pricing became admin-editable (see below). |
+| `app/admin/pricing/` (`page.tsx`, `new/page.tsx`, `[id]/page.tsx`, `actions.ts`) | Admin UI to add/edit/delete plans — name, tagline, monthly/yearly price, Paddle price IDs, features, highlight flag, sort order. Admin-only (`access.kind === "admin"`), not delegable to a moderator permission, since it controls real checkout amounts. |
+| `components/PricingPlanEditor.tsx` | The add/edit form itself, used by both `new/page.tsx` and `[id]/page.tsx`. |
+| `components/PaddleCheckoutButton.tsx` | Client component. Loads Paddle.js once per page (`initializePaddle`), then opens the checkout overlay for a price ID resolved server-side and passed in as a prop. Redirects to `/login` first if the visitor isn't signed in. |
+| `components/PricingSection.tsx` | The pricing cards — now rendered from the `plans` prop (from `getPricingPlans()`) instead of a hardcoded array. Shows "Current Plan" instead of a buy button if the visitor already has that plan id. |
+| `app/pricing/page.tsx` | Server Component — fetches `getPricingPlans()` plus the current user (if any) and their plan, passes everything down to `PricingSection`. `force-dynamic` since it depends on the session. |
 | `app/api/webhooks/paddle/route.ts` | The webhook endpoint. Verifies the `paddle-signature` header via `@paddle/paddle-node-sdk`, then syncs `profiles.plan` and sends the confirmation email. **This is the actual source of truth for plan changes** — the checkout button only *starts* a purchase, it never grants a plan itself. |
 | `lib/email.ts` | `purchaseConfirmationEmail()` added here (matches the existing `welcomeEmail`/`ticketReplyEmail` pattern) — sent from the webhook on `transaction.completed`. Design mirrors `email-templates/purchase-confirmation.html`. |
 | `components/DashboardContent.tsx` + `app/dashboard/page.tsx` | Shows the current plan's renewal date and "Update Payment Method" / "Cancel Subscription" links (straight to Paddle's own hosted pages — no custom cancel flow was built) when the profile has them. |
 | `docs/paddle-schema.sql` | Adds the Paddle-related columns to `profiles`. Run this once in Supabase's SQL editor. |
+| `docs/pricing-plans-schema.sql` | Creates the `pricing_plans` table (with a one-time seed matching what was hardcoded immediately before this table existed). Run this once too. |
 
 ## Database
 
@@ -66,6 +70,27 @@ column gets updated, alongside the existing admin-panel manual override
 the webhook is just a new writer of it, exactly like the admin panel's manual
 plan override already was.
 
+`docs/pricing-plans-schema.sql` creates `pricing_plans` — one row per plan
+shown on `/pricing`, editable at `/admin/pricing`:
+
+| Column | Purpose |
+|---|---|
+| `id` | Plan slug (e.g. `free`/`pro`/`business`) — also what gets written to `profiles.plan` on checkout, so it must match what `lib/planLimits.ts` expects for real usage limits to apply (see the warning below). |
+| `name`, `tagline`, `cta`, `href` | Display text; `href` is used instead of a checkout button when both price ids are null (a free/no-checkout plan). |
+| `monthly_price`, `yearly_price` | **Display only** — see the warning in "Setting it up" below. |
+| `monthly_price_id`, `yearly_price_id` | The real Paddle `pri_...` IDs actually charged at checkout. |
+| `highlighted`, `display_order` | "Most popular" badge; sort order on the page. |
+| `features` | `jsonb` array of `{text, icon?}` — `icon: "sparkle"` highlights a feature (e.g. AI Summarize) instead of the default checkmark. |
+
+> **A plan id outside `free`/`pro`/`business` isn't fully wired up yet.**
+> Adding a plan here makes it sell-able and sets `profiles.plan` to whatever
+> id you chose on checkout, but `lib/planLimits.ts` and `lib/aiConfig.ts`
+> (file-size caps, AI Summarize quota, office-conversion quota) still only
+> recognize the original three ids — an unrecognized one is treated as
+> `free` for every limit check even though the customer paid. Renaming or
+> adding a plan's *display* is safe; giving it genuinely different limits
+> needs those two files updated too.
+
 ## Setting it up
 
 ### 1. Paddle dashboard (do this in Sandbox first)
@@ -77,7 +102,8 @@ plan override already was.
    a monthly and a yearly **price**. Prices must be **recurring**, not
    one-off, or Paddle won't create a subscription on checkout. Copy each
    price's ID (`pri_...`) — real IDs look like `pri_01h...`, not a plain
-   dollar amount.
+   dollar amount — and paste it into the matching plan's Price ID field at
+   `/admin/pricing` (no env var, no redeploy needed).
 3. **Developer Tools → Authentication**:
    - **Client-side tokens** tab → new token → `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN`
      (starts `test_` for sandbox, `live_` for a live account).
@@ -107,7 +133,11 @@ account and live keys/price IDs.
 
 ### 3. Database
 
-Run `docs/paddle-schema.sql` once against your Supabase project's SQL editor.
+Run both `docs/paddle-schema.sql` and `docs/pricing-plans-schema.sql` once
+against your Supabase project's SQL editor (order doesn't matter between
+them). Then go to `/admin/pricing` and paste each plan's real Paddle price
+IDs (step 2 above) — the table seeds with the price IDs that existed at the
+time this migration was written, which may already be stale.
 
 ### 4. Testing locally
 
@@ -134,8 +164,10 @@ errors there) and check:
 
 - The domain you're testing on is **Website approval**'d in Paddle (step 5) —
   the single most common reason checkout silently refuses to open.
-- `NEXT_PUBLIC_PADDLE_PRICE_*` env vars are real `pri_...` IDs, not prices —
-  a plain number there fails silently rather than throwing a clear error.
+- The plan's Price ID fields at `/admin/pricing` are real `pri_...` IDs, not
+  prices — a plain number there fails silently rather than throwing a clear
+  error, and a blank/missing ID shows "Billing isn't configured yet" instead
+  of opening checkout.
 - `NEXT_PUBLIC_PADDLE_CLIENT_TOKEN` matches the environment (`test_` prefix
   for sandbox) and `NEXT_PUBLIC_PADDLE_ENV` matches which dashboard the price
   IDs/tokens came from — mixing sandbox IDs with `production` env (or vice

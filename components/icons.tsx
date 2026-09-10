@@ -444,6 +444,12 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M5 17v2.5M3.75 18.25h2.5" />
     </>
   ),
+  tag: (
+    <>
+      <path d="M12.6 3H5a2 2 0 0 0-2 2v7.6a2 2 0 0 0 .6 1.4l8.9 8.9a2 2 0 0 0 2.8 0l6.5-6.5a2 2 0 0 0 0-2.8L13 3.6a2 2 0 0 0-.4-.6z" />
+      <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
 };
 
 export function ToolIcon({ name, className }: IconProps & { name: string }) {
