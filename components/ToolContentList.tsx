@@ -21,8 +21,14 @@ export function ToolContentList({ tools, customizedSlugs }: { tools: Tool[]; cus
         placeholder="Search tools..."
         className="input input-bordered input-sm w-full sm:max-w-xs"
       />
+      <p className="mt-2 text-xs text-base-content/50">
+        {filtered.length} of {tools.length} tools
+      </p>
 
-      <div className="mt-3 max-h-[32rem] overflow-y-auto rounded-lg border border-base-300 bg-base-100">
+      {/* No inner max-height/scroll — with 40+ tools a short scroll box hid
+          most of the list below the fold, so tools past the first dozen
+          looked like they were missing. */}
+      <div className="mt-2 rounded-lg border border-base-300 bg-base-100">
         {filtered.length === 0 ? (
           <p className="p-4 text-center text-sm text-base-content/50">No tools match.</p>
         ) : (

@@ -56,20 +56,26 @@ export function SplitPdfWorkspace() {
     }
   }
 
-  function useSplitInHalf() {
-    if (!totalPages) return;
+  // One click does the whole split (fills the range field so the user can
+  // see what happened, then runs it) — previously it only filled the field
+  // and waited for "Split PDF", which read as the button doing nothing.
+  function splitInHalf() {
+    if (!totalPages || totalPages < 2) return;
     const half = Math.ceil(totalPages / 2);
-    setRangeInput(`1-${half}, ${half + 1}-${totalPages}`);
+    const ranges = `1-${half}, ${half + 1}-${totalPages}`;
+    setRangeInput(ranges);
+    void handleSplit(ranges);
   }
 
-  function useSplitEveryPage() {
+  function splitEveryPage() {
     if (!totalPages) return;
     setRangeInput(Array.from({ length: totalPages }, (_, index) => index + 1).join(", "));
   }
 
-  async function handleSplit() {
+  async function handleSplit(ranges: string = rangeInput) {
     if (!file || !totalPages) return;
-    const parsed = parsePageGroups(rangeInput, totalPages);
+    reset();
+    const parsed = parsePageGroups(ranges, totalPages);
     if ("error" in parsed) {
       setStatus("error");
       setErrorMessage(parsed.error);
@@ -187,10 +193,16 @@ export function SplitPdfWorkspace() {
             {totalPages === 1 ? "" : "s"}.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={useSplitInHalf} className="btn btn-outline btn-xs">
+            <button
+              type="button"
+              onClick={splitInHalf}
+              disabled={totalPages < 2 || status === "splitting"}
+              title={totalPages < 2 ? "Needs at least 2 pages to split in half." : undefined}
+              className="btn btn-outline btn-xs"
+            >
               Split in Half
             </button>
-            <button type="button" onClick={useSplitEveryPage} className="btn btn-outline btn-xs">
+            <button type="button" onClick={splitEveryPage} className="btn btn-outline btn-xs">
               Split Every Page
             </button>
           </div>
@@ -217,7 +229,7 @@ export function SplitPdfWorkspace() {
 
       <button
         type="button"
-        onClick={handleSplit}
+        onClick={() => handleSplit()}
         disabled={!totalPages || status === "splitting"}
         className="btn btn-primary mt-5 w-full"
       >
